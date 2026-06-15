@@ -1,26 +1,26 @@
 # Trimanga
 
-Trimanga is a production-grade command-line tool for cleaning manga archives. It scans folders, images, `.zip`, and `.cbz` files for likely scanlation credits, recruitment pages, support ads, and repeated release clutter, then gives you a reviewable set of pages instead of deleting anything blindly.
+Trimanga is a command-line tool for cleaning manga archives. It scans folders, images, `.zip`, and `.cbz` files for likely scanlation credits, recruitment pages, support ads and repeated release clutter, then gives you a reviewable set of pages. Trimanga will never alter any of the provided files, only offer suggestions.
 
-It is built for people who care about clean, portable manga libraries: fewer interruption pages, smaller archives, better reader navigation, and a more consistent collection.
+It is built for people who care about clean, portable manga libraries: fewer interruption pages, smaller archives, better reader navigation.
 
 ## Why Trimanga Exists
 
-Digital manga collections grow fast. A single library can contain thousands of pages that are not part of the actual story: release credits, recruitment pages, Discord promos, donation pages, duplicated group bumpers, and archive filler. These pages are not always bad, but they often become noise once the book is already in your personal library.
+Digital manga collections grow fast. A single library can contain thousands of pages that are not part of the actual story: release credits, recruitment pages, Discord promos, donation pages, duplicated group bumpers and archive filler. These pages are not always bad, but they often become noise once the book is already in your personal library.
 
 Removing that clutter matters because it:
 
 - Keeps reading focused by reducing non-story interruptions.
 - Saves disk space across large collections.
-- Makes `.cbz` archives cleaner for e-readers, tablets, and library managers.
+- Makes `.cbz` archives cleaner for e-readers, tablets and library managers.
 - Reduces duplicate pages that appear across many chapters or volumes.
 - Helps preserve a polished, book-like archive without hand-checking every page.
 
-Trimanga is intentionally conservative. False positives are more harmful than missed ads, so the tool is designed to recommend pages for review rather than aggressively remove content.
+Trimanga is intentionally conservative. False positives are more harmful than missed ads, so the tool is designed to recommend pages for review rather than aggressively remove content. You are responsible for removing any of the files suggested.
 
 ## What It Detects
 
-Trimanga combines OCR, page-layout statistics, volume-wide outlier scoring, and visual similarity matching to flag likely removable pages, including:
+Trimanga combines OCR, page-layout statistics, volume-wide outlier scoring and visual similarity matching to flag likely removable pages, including:
 
 - Scanlation credit pages
 - Recruitment pages
@@ -30,7 +30,7 @@ Trimanga combines OCR, page-layout statistics, volume-wide outlier scoring, and 
 - Repeated release cards or bumpers
 - Extreme visual outliers compared with the rest of the volume
 
-Normal manga pages with panels, speech bubbles, artwork, and dialogue are given a strong negative score so they are biased toward being kept.
+Normal manga pages with panels, speech bubbles, artwork and dialogue are given a strong negative score so they are biased toward being kept.
 
 ## Supported Inputs
 
@@ -48,13 +48,10 @@ Supported image types:
 ## Features
 
 - Native Apple Vision OCR on macOS.
-- Tesseract OCR fallback on macOS, Linux, and Windows.
+- Tesseract OCR fallback on macOS, Linux and Windows.
 - Parallel OCR workers for faster scans.
 - Conservative classifier tuned for review-first workflows.
 - JSON output for automation.
-- Review folder export for manual approval.
-- CMake-based build and package generation.
-- Packaging templates for Homebrew, Scoop, Chocolatey, winget, `.deb`, `.rpm`, and `.tar.gz`.
 
 ## Requirements
 
@@ -187,18 +184,6 @@ Expected package formats:
 - macOS: `.tar.gz`
 - Linux: `.tar.gz`, `.deb`, `.rpm`
 - Windows: `.zip`
-
-## Package Manager Templates
-
-Publishing templates live in [packaging](packaging):
-
-- Homebrew formula: [packaging/homebrew/trimanga.rb](packaging/homebrew/trimanga.rb)
-- Scoop manifest: [packaging/scoop/trimanga.json](packaging/scoop/trimanga.json)
-- Chocolatey package: [packaging/chocolatey](packaging/chocolatey)
-- winget manifests: [packaging/winget](packaging/winget)
-- Linux packaging notes: [packaging/linux/README.md](packaging/linux/README.md)
-
-Before publishing, replace placeholder checksums with release artifact SHA-256 values.
 
 ## Safety Model
 
