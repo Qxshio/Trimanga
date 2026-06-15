@@ -1,8 +1,8 @@
 CXX ?= clang++
 BUILD_DIR ?= build
-TARGET := $(BUILD_DIR)/scanlation_tool
+TARGET := $(BUILD_DIR)/trimanga
 
-CXXFLAGS ?= -std=c++20 -Wall -Wextra -Wpedantic -Iinclude -DSCANLATION_TOOL_APPLE=1
+CXXFLAGS ?= -std=c++20 -Wall -Wextra -Wpedantic -Iinclude -DTRIMANGA_APPLE=1
 LDFLAGS ?= -framework Foundation -framework Vision -framework CoreImage -framework CoreGraphics -framework ImageIO
 
 SOURCES := \

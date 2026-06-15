@@ -1,6 +1,6 @@
-#include "scanlation_tool/image_features.hpp"
+#include "trimanga/image_features.hpp"
 
-namespace scanlation {
+namespace trimanga {
 
 PageFeatures extract_page_features(const std::filesystem::path&) {
   return {};
@@ -23,4 +23,4 @@ double visual_hash_distance(std::uint64_t left, std::uint64_t right) {
   return static_cast<double>(count);
 }
 
-}  // namespace scanlation
+}  // namespace trimanga

@@ -1,9 +1,9 @@
-#include "scanlation_tool/scanner.hpp"
+#include "trimanga/scanner.hpp"
 
-#include "scanlation_tool/classifier.hpp"
-#include "scanlation_tool/file_utils.hpp"
-#include "scanlation_tool/image_features.hpp"
-#include "scanlation_tool/ocr.hpp"
+#include "trimanga/classifier.hpp"
+#include "trimanga/file_utils.hpp"
+#include "trimanga/image_features.hpp"
+#include "trimanga/ocr.hpp"
 
 #include <algorithm>
 #include <atomic>
@@ -20,7 +20,7 @@
 
 namespace fs = std::filesystem;
 
-namespace scanlation {
+namespace trimanga {
 
 namespace {
 
@@ -100,7 +100,7 @@ std::vector<PageRef> build_page_refs(const fs::path& input, TempDirectory& temp)
   fs::path label_root;
 
   if (fs::is_regular_file(input) && is_cbz_path(input)) {
-    temp = TempDirectory(make_temp_dir("scanlation-tool"));
+    temp = TempDirectory(make_temp_dir("trimanga"));
     images = extract_cbz(input, temp.path());
     label_root = temp.path();
   } else if (fs::is_directory(input)) {
@@ -274,11 +274,11 @@ ScanResult scan(const fs::path& input, const ScanOptions& options) {
 }
 
 void print_result_table(const ScanResult& result) {
-  std::cout << "Scanlation Tool " << result.detector_version << "\n";
+  std::cout << "Trimanga " << result.detector_version << "\n";
   std::cout << "Input: " << result.input << "\n";
   std::cout << "OCR: " << result.ocr_backend << "\n";
   std::cout << "Pages scanned: " << result.scanned_pages << "\n";
-  std::cout << "Potential scanlation/ad pages: " << result.candidates.size() << "\n\n";
+  std::cout << "Pages recommended for review: " << result.candidates.size() << "\n\n";
 
   if (result.candidates.empty()) {
     std::cout << "No suspicious pages found.\n";
@@ -324,4 +324,4 @@ void print_result_json(const ScanResult& result) {
   std::cout << "}\n";
 }
 
-}  // namespace scanlation
+}  // namespace trimanga

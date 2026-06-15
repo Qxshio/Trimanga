@@ -1,0 +1,16 @@
+PackageIdentifier: Qxshio.Trimanga
+PackageVersion: 0.1.0
+PackageLocale: en-US
+Publisher: Qxshio
+PackageName: Trimanga
+License: MIT
+ShortDescription: Clean manga archives by detecting removable scanlation and ad pages.
+Description: Trimanga flags scanlation credits, recruitment pages, support ads, and repeated release clutter for manual review in manga folders and CBZ archives.
+Tags:
+  - manga
+  - cbz
+  - ocr
+  - scanlation
+  - cli
+ManifestType: defaultLocale
+ManifestVersion: 1.6.0

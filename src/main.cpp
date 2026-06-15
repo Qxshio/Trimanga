@@ -1,4 +1,4 @@
-#include "scanlation_tool/scanner.hpp"
+#include "trimanga/scanner.hpp"
 
 #include <algorithm>
 #include <cstdlib>
@@ -13,9 +13,10 @@ namespace {
 
 void print_help() {
   std::cout
-      << "scanlation_tool 0.1.0\n\n"
+      << "Trimanga 0.1.0\n"
+      << "Clean manga archives by finding likely scanlation credits, ad pages, and release clutter.\n\n"
       << "Usage:\n"
-      << "  scanlation_tool scan <folder-or-cbz> [options]\n\n"
+      << "  trimanga scan <folder-or-cbz> [options]\n\n"
       << "Options:\n"
       << "  --ocr <auto|apple|tesseract>   OCR backend to use. Default: auto\n"
       << "  --workers <n>                  Number of OCR workers. Default: 4\n"
@@ -25,29 +26,29 @@ void print_help() {
       << "  --help                         Show this help\n"
       << "  --version                      Show version\n\n"
       << "Examples:\n"
-      << "  scanlation_tool scan ~/Documents/Mangas/Volume.cbz --review-dir /tmp/review\n"
-      << "  scanlation_tool scan ./MangaFolder --ocr apple --workers 2 --format json\n";
+      << "  trimanga scan ~/Documents/Mangas/Volume.cbz --review-dir /tmp/review\n"
+      << "  trimanga scan ./MangaFolder --ocr apple --workers 2 --format json\n";
 }
 
-scanlation::OcrPreference parse_ocr(const std::string& value) {
+trimanga::OcrPreference parse_ocr(const std::string& value) {
   if (value == "auto") {
-    return scanlation::OcrPreference::Auto;
+    return trimanga::OcrPreference::Auto;
   }
   if (value == "apple" || value == "apple-vision" || value == "vision") {
-    return scanlation::OcrPreference::AppleVision;
+    return trimanga::OcrPreference::AppleVision;
   }
   if (value == "tesseract") {
-    return scanlation::OcrPreference::Tesseract;
+    return trimanga::OcrPreference::Tesseract;
   }
   throw std::runtime_error("invalid OCR backend: " + value);
 }
 
-scanlation::OutputFormat parse_format(const std::string& value) {
+trimanga::OutputFormat parse_format(const std::string& value) {
   if (value == "table") {
-    return scanlation::OutputFormat::Table;
+    return trimanga::OutputFormat::Table;
   }
   if (value == "json") {
-    return scanlation::OutputFormat::Json;
+    return trimanga::OutputFormat::Json;
   }
   throw std::runtime_error("invalid output format: " + value);
 }
@@ -69,7 +70,7 @@ int main(int argc, char** argv) {
       return 0;
     }
     if (std::string(argv[1]) == "--version") {
-      std::cout << "scanlation_tool 0.1.0\n";
+      std::cout << "Trimanga 0.1.0\n";
       return 0;
     }
     if (std::string(argv[1]) != "scan") {
@@ -80,7 +81,7 @@ int main(int argc, char** argv) {
     }
 
     fs::path input = argv[2];
-    scanlation::ScanOptions options;
+    trimanga::ScanOptions options;
     for (int index = 3; index < argc; ++index) {
       const std::string arg = argv[index];
       if (arg == "--help" || arg == "-h") {
@@ -102,11 +103,11 @@ int main(int argc, char** argv) {
       }
     }
 
-    scanlation::ScanResult result = scan(input, options);
-    if (options.format == scanlation::OutputFormat::Json) {
-      scanlation::print_result_json(result);
+    trimanga::ScanResult result = scan(input, options);
+    if (options.format == trimanga::OutputFormat::Json) {
+      trimanga::print_result_json(result);
     } else {
-      scanlation::print_result_table(result);
+      trimanga::print_result_table(result);
     }
     return 0;
   } catch (const std::exception& error) {

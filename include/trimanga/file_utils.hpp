@@ -4,7 +4,7 @@
 #include <string>
 #include <vector>
 
-namespace scanlation {
+namespace trimanga {
 
 bool is_image_path(const std::filesystem::path& path);
 bool is_cbz_path(const std::filesystem::path& path);
@@ -14,4 +14,4 @@ void copy_file_create_dirs(const std::filesystem::path& from, const std::filesys
 std::vector<std::filesystem::path> extract_cbz(const std::filesystem::path& cbz, const std::filesystem::path& destination);
 std::string path_label(const std::filesystem::path& path);
 
-}  // namespace scanlation
+}  // namespace trimanga

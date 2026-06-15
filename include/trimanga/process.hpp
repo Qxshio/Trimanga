@@ -4,7 +4,7 @@
 #include <string>
 #include <vector>
 
-namespace scanlation {
+namespace trimanga {
 
 struct ProcessResult {
   int exit_code = -1;
@@ -15,4 +15,4 @@ ProcessResult run_process(const std::vector<std::string>& args, int timeout_seco
 std::string shell_quote(const std::string& value);
 bool command_exists(const std::string& command);
 
-}  // namespace scanlation
+}  // namespace trimanga

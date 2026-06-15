@@ -1,6 +1,6 @@
-#include "scanlation_tool/file_utils.hpp"
+#include "trimanga/file_utils.hpp"
 
-#include "scanlation_tool/process.hpp"
+#include "trimanga/process.hpp"
 
 #include <algorithm>
 #include <cctype>
@@ -12,7 +12,7 @@
 
 namespace fs = std::filesystem;
 
-namespace scanlation {
+namespace trimanga {
 
 namespace {
 
@@ -113,4 +113,4 @@ std::string path_label(const fs::path& path) {
   return path.filename().string();
 }
 
-}  // namespace scanlation
+}  // namespace trimanga

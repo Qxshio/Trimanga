@@ -1,4 +1,4 @@
-#include "scanlation_tool/image_features.hpp"
+#include "trimanga/image_features.hpp"
 
 #import <Foundation/Foundation.h>
 #import <CoreGraphics/CoreGraphics.h>
@@ -10,7 +10,7 @@
 #include <numeric>
 #include <vector>
 
-namespace scanlation {
+namespace trimanga {
 
 namespace {
 
@@ -265,4 +265,4 @@ double visual_hash_distance(std::uint64_t left, std::uint64_t right) {
   return static_cast<double>(__builtin_popcountll(left ^ right));
 }
 
-}  // namespace scanlation
+}  // namespace trimanga

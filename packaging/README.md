@@ -1,6 +1,6 @@
 # Packaging
 
-This directory contains packaging templates for common distribution channels.
+This directory contains packaging templates for common Trimanga distribution channels.
 
 The project can build native release archives with CPack:
 
@@ -18,4 +18,4 @@ Publishing notes:
 - Chocolatey requires packaging the executable or downloading a release archive from `tools/chocolateyinstall.ps1`.
 - Linux packages are generated through CPack as `.tar.gz`, `.deb`, and `.rpm` on Linux.
 
-Replace placeholder repository URLs, checksums, maintainers, and release versions before publishing.
+Replace placeholder checksums and release versions before publishing.

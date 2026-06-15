@@ -2,10 +2,10 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-BINARY="${ROOT_DIR}/build/scanlation_tool"
+BINARY="${ROOT_DIR}/build/trimanga"
 
 if [[ ! -x "${BINARY}" ]]; then
-  echo "scanlation_tool has not been built. Run: make"
+  echo "trimanga has not been built. Run: make"
   exit 1
 fi
 

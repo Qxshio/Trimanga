@@ -1,11 +1,11 @@
-#include "scanlation_tool/ocr.hpp"
+#include "trimanga/ocr.hpp"
 
 #include <stdexcept>
 
-namespace scanlation {
+namespace trimanga {
 
 std::unique_ptr<IOcrBackend> make_ocr_backend(OcrPreference preference) {
-#if defined(SCANLATION_TOOL_APPLE)
+#if defined(TRIMANGA_APPLE)
   if (preference == OcrPreference::AppleVision || preference == OcrPreference::Auto) {
     auto apple = make_apple_vision_backend();
     if (apple && apple->available()) {
@@ -28,4 +28,4 @@ std::unique_ptr<IOcrBackend> make_ocr_backend(OcrPreference preference) {
   throw std::runtime_error("no OCR backend available; install Tesseract or use macOS Apple Vision");
 }
 
-}  // namespace scanlation
+}  // namespace trimanga

@@ -1,4 +1,4 @@
-#include "scanlation_tool/classifier.hpp"
+#include "trimanga/classifier.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -10,7 +10,7 @@
 #include <string>
 #include <unordered_set>
 
-namespace scanlation {
+namespace trimanga {
 
 namespace {
 
@@ -342,4 +342,4 @@ Classification classify_page(const std::string& text, const PageFeatures& featur
   return result;
 }
 
-}  // namespace scanlation
+}  // namespace trimanga

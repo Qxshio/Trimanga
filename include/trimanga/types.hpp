@@ -6,7 +6,7 @@
 #include <string>
 #include <vector>
 
-namespace scanlation {
+namespace trimanga {
 
 struct PageFeatures {
   double aspect_ratio = 0.0;
@@ -95,4 +95,4 @@ inline constexpr const char* kDetectorVersion = "2026-06-16-cpp-v1";
 inline constexpr int kVisualHashSize = 16;
 inline constexpr int kVisualMatchDistance = 6;
 
-}  // namespace scanlation
+}  // namespace trimanga

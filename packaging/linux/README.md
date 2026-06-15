@@ -11,7 +11,7 @@ cmake --build build --target package
 
 Expected package outputs on Linux:
 
-- `scanlation-tool-0.1.0-Linux.tar.gz`
+- `trimanga-0.1.0-Linux.tar.gz`
 - `.deb`
 - `.rpm`
 

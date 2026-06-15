@@ -1,6 +1,6 @@
-#include "scanlation_tool/ocr.hpp"
+#include "trimanga/ocr.hpp"
 
-#include "scanlation_tool/process.hpp"
+#include "trimanga/process.hpp"
 
 #include <algorithm>
 #include <cctype>
@@ -10,7 +10,7 @@
 #include <sstream>
 #include <string>
 
-namespace scanlation {
+namespace trimanga {
 
 namespace {
 
@@ -91,4 +91,4 @@ std::unique_ptr<IOcrBackend> make_tesseract_backend() {
   return std::make_unique<TesseractBackend>();
 }
 
-}  // namespace scanlation
+}  // namespace trimanga

@@ -1,4 +1,4 @@
-#include "scanlation_tool/ocr.hpp"
+#include "trimanga/ocr.hpp"
 
 #import <Foundation/Foundation.h>
 #import <CoreImage/CoreImage.h>
@@ -7,7 +7,7 @@
 #include <memory>
 #include <string>
 
-namespace scanlation {
+namespace trimanga {
 
 namespace {
 
@@ -76,4 +76,4 @@ std::unique_ptr<IOcrBackend> make_apple_vision_backend() {
   return std::make_unique<AppleVisionBackend>();
 }
 
-}  // namespace scanlation
+}  // namespace trimanga

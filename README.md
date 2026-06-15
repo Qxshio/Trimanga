@@ -1,19 +1,60 @@
-# Scanlation Tool
+# Trimanga
 
-Scanlation Tool is a standalone C++ command-line scanner for finding likely scanlation credits, recruitment pages, support ads, and similar removable pages inside manga folders or `.cbz` archives.
+Trimanga is a production-grade command-line tool for cleaning manga archives. It scans folders, images, `.zip`, and `.cbz` files for likely scanlation credits, recruitment pages, support ads, and repeated release clutter, then gives you a reviewable set of pages instead of deleting anything blindly.
 
-The detector is intentionally conservative. It combines OCR text, page-layout statistics, volume-wide outlier scoring, and repeated-page visual matching, then biases toward keeping pages unless there is strong evidence that a page is removable.
+It is built for people who care about clean, portable manga libraries: fewer interruption pages, smaller archives, better reader navigation, and a more consistent collection.
+
+## Why Trimanga Exists
+
+Digital manga collections grow fast. A single library can contain thousands of pages that are not part of the actual story: release credits, recruitment pages, Discord promos, donation pages, duplicated group bumpers, and archive filler. These pages are not always bad, but they often become noise once the book is already in your personal library.
+
+Removing that clutter matters because it:
+
+- Keeps reading focused by reducing non-story interruptions.
+- Saves disk space across large collections.
+- Makes `.cbz` archives cleaner for e-readers, tablets, and library managers.
+- Reduces duplicate pages that appear across many chapters or volumes.
+- Helps preserve a polished, book-like archive without hand-checking every page.
+
+Trimanga is intentionally conservative. False positives are more harmful than missed ads, so the tool is designed to recommend pages for review rather than aggressively remove content.
+
+## What It Detects
+
+Trimanga combines OCR, page-layout statistics, volume-wide outlier scoring, and visual similarity matching to flag likely removable pages, including:
+
+- Scanlation credit pages
+- Recruitment pages
+- Discord/social/contact pages
+- Donation or support pages
+- Official purchase/support reminder pages
+- Repeated release cards or bumpers
+- Extreme visual outliers compared with the rest of the volume
+
+Normal manga pages with panels, speech bubbles, artwork, and dialogue are given a strong negative score so they are biased toward being kept.
+
+## Supported Inputs
+
+- Manga folders, scanned recursively
+- Single image files
+- `.cbz` archives
+- `.zip` archives
+
+Supported image types:
+
+```text
+.jpg .jpeg .png .webp .tif .tiff
+```
 
 ## Features
 
-- Scans manga folders, single image files, `.cbz`, and `.zip` archives.
-- Uses Apple Vision OCR on macOS when available.
-- Uses Tesseract OCR as the portable backend on macOS, Linux, and Windows.
-- Runs OCR work in parallel with configurable worker count.
-- Exports results as a readable table or JSON.
-- Copies suspicious pages into a review folder for manual approval.
-- Builds as a normal CMake project.
-- Includes packaging templates for Homebrew, Scoop, Chocolatey, winget, and Linux CPack packages.
+- Native Apple Vision OCR on macOS.
+- Tesseract OCR fallback on macOS, Linux, and Windows.
+- Parallel OCR workers for faster scans.
+- Conservative classifier tuned for review-first workflows.
+- JSON output for automation.
+- Review folder export for manual approval.
+- CMake-based build and package generation.
+- Packaging templates for Homebrew, Scoop, Chocolatey, winget, `.deb`, `.rpm`, and `.tar.gz`.
 
 ## Requirements
 
@@ -26,6 +67,11 @@ The detector is intentionally conservative. It combines OCR text, page-layout st
 
 Apple Vision is built into macOS and is preferred by default.
 
+```sh
+xcode-select --install
+brew install cmake tesseract unzip
+```
+
 ### Linux
 
 - CMake 3.22+
@@ -33,14 +79,14 @@ Apple Vision is built into macOS and is preferred by default.
 - Tesseract OCR
 - `unzip` or `7z`
 
-Debian/Ubuntu example:
+Debian/Ubuntu:
 
 ```sh
 sudo apt-get update
 sudo apt-get install -y cmake g++ tesseract-ocr unzip
 ```
 
-Fedora example:
+Fedora:
 
 ```sh
 sudo dnf install cmake gcc-c++ tesseract unzip
@@ -53,7 +99,7 @@ sudo dnf install cmake gcc-c++ tesseract unzip
 - Tesseract OCR installed and available on `PATH`
 - PowerShell, included with Windows, for archive extraction
 
-Recommended Tesseract install options:
+Recommended Tesseract install:
 
 ```powershell
 winget install UB-Mannheim.TesseractOCR
@@ -77,13 +123,13 @@ cmake --build build --config Release
 The binary will be created at:
 
 ```text
-build/scanlation_tool
+build/trimanga
 ```
 
 On Windows with Visual Studio generators, the binary is usually under:
 
 ```text
-build/Release/scanlation_tool.exe
+build/Release/trimanga.exe
 ```
 
 ### macOS Makefile
@@ -96,10 +142,24 @@ make
 
 ## Usage
 
+Scan a `.cbz`:
+
 ```sh
-./build/scanlation_tool scan "/path/to/manga.cbz"
-./build/scanlation_tool scan "/path/to/manga-folder" --format json
-./build/scanlation_tool scan "/path/to/manga.cbz" --review-dir /tmp/review
+trimanga scan "I Hear the Sunspot.cbz"
+```
+
+Scan a manga folder and copy suspicious pages into a review folder:
+
+```sh
+trimanga scan "./I Hear the Sunspot" \
+  --workers 4 \
+  --review-dir /tmp/sunspot-review
+```
+
+Output JSON for scripts:
+
+```sh
+trimanga scan "./Volume 01.cbz" --format json
 ```
 
 Options:
@@ -112,17 +172,9 @@ Options:
 --keep-temp                  Keep extracted archive temp files
 ```
 
-Example review workflow:
-
-```sh
-./build/scanlation_tool scan "I Hear the Sunspot.cbz" \
-  --workers 4 \
-  --review-dir /tmp/sunspot-review
-```
-
 ## Package Builds
 
-CPack is configured for release archives and native Linux packages.
+CPack is configured for release archives and native Linux packages:
 
 ```sh
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
@@ -138,23 +190,33 @@ Expected package formats:
 
 ## Package Manager Templates
 
-Packaging templates live in [packaging](packaging):
+Publishing templates live in [packaging](packaging):
 
-- Homebrew formula: [packaging/homebrew/scanlation-tool.rb](packaging/homebrew/scanlation-tool.rb)
-- Scoop manifest: [packaging/scoop/scanlation-tool.json](packaging/scoop/scanlation-tool.json)
+- Homebrew formula: [packaging/homebrew/trimanga.rb](packaging/homebrew/trimanga.rb)
+- Scoop manifest: [packaging/scoop/trimanga.json](packaging/scoop/trimanga.json)
 - Chocolatey package: [packaging/chocolatey](packaging/chocolatey)
 - winget manifests: [packaging/winget](packaging/winget)
 - Linux packaging notes: [packaging/linux/README.md](packaging/linux/README.md)
 
-Before publishing, replace placeholder repository URLs, checksums, maintainers, and release artifacts.
+Before publishing, replace placeholder checksums with release artifact SHA-256 values.
+
+## Safety Model
+
+Trimanga does not delete pages by default. It identifies pages that deserve attention and can copy them to a review folder. This keeps the cleanup workflow auditable and avoids destructive surprises.
+
+The classifier is tuned around three principles:
+
+- Strong evidence is required before a page is flagged.
+- Normal manga-story features reduce confidence.
+- Borderline pages should be kept.
 
 ## Platform Notes
 
-macOS has the strongest native support because the project uses Apple Vision for OCR and ImageIO/CoreGraphics for image statistics.
+macOS has the strongest native support because Trimanga uses Apple Vision for OCR and ImageIO/CoreGraphics for image statistics.
 
 Linux and Windows are supported through the portable Tesseract CLI backend. Their current image-feature extractor is intentionally minimal, so OCR indicators carry more of the decision-making until a cross-platform image backend is added.
 
-Apple Vision may print private TextRecognition model warnings on some macOS installs. The scanner treats the backend as available if Vision returns OCR text; those warnings are not fatal.
+Apple Vision may print private TextRecognition model warnings on some macOS installs. Trimanga treats the backend as available if Vision returns OCR text; those warnings are not fatal.
 
 ## Development
 
@@ -162,6 +224,12 @@ Run the smoke test after building:
 
 ```sh
 tests/smoke.sh
+```
+
+Run CTest when building with CMake:
+
+```sh
+ctest --test-dir build --output-on-failure
 ```
 
 Format with `clang-format` using the checked-in [.clang-format](.clang-format).

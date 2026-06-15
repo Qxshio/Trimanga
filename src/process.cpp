@@ -1,4 +1,4 @@
-#include "scanlation_tool/process.hpp"
+#include "trimanga/process.hpp"
 
 #include <array>
 #include <cstdio>
@@ -12,7 +12,7 @@
 #include <sys/wait.h>
 #endif
 
-namespace scanlation {
+namespace trimanga {
 
 std::string shell_quote(const std::string& value) {
 #if defined(_WIN32)
@@ -98,4 +98,4 @@ bool command_exists(const std::string& command) {
   return result.exit_code == 0 && !result.stdout_text.empty();
 }
 
-}  // namespace scanlation
+}  // namespace trimanga

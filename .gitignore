@@ -4,3 +4,5 @@ build/
 *.tmp
 *.log
 compile_commands.json
+dist/
+_CPack_Packages/

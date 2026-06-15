@@ -1,12 +1,12 @@
 #pragma once
 
-#include "scanlation_tool/types.hpp"
+#include "trimanga/types.hpp"
 
 #include <filesystem>
 #include <memory>
 #include <string>
 
-namespace scanlation {
+namespace trimanga {
 
 class IOcrBackend {
  public:
@@ -19,8 +19,8 @@ class IOcrBackend {
 std::unique_ptr<IOcrBackend> make_ocr_backend(OcrPreference preference);
 std::unique_ptr<IOcrBackend> make_tesseract_backend();
 
-#if defined(SCANLATION_TOOL_APPLE)
+#if defined(TRIMANGA_APPLE)
 std::unique_ptr<IOcrBackend> make_apple_vision_backend();
 #endif
 
-}  // namespace scanlation
+}  // namespace trimanga
