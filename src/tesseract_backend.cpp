@@ -37,18 +37,32 @@ class TesseractBackend final : public IOcrBackend {
   std::string name() const override { return "Tesseract"; }
 
   bool available() const override {
+#if defined(_WIN32)
+    return command_exists("tesseract") ||
+           std::filesystem::exists("C:/Program Files/Tesseract-OCR/tesseract.exe") ||
+           std::filesystem::exists("C:/Program Files (x86)/Tesseract-OCR/tesseract.exe");
+#else
     return command_exists("tesseract") || std::filesystem::exists("/opt/homebrew/bin/tesseract") ||
            std::filesystem::exists("/usr/local/bin/tesseract");
+#endif
   }
 
   std::string read_text(const std::filesystem::path& image_path) const override {
     std::string binary = "tesseract";
     if (!command_exists(binary)) {
+#if defined(_WIN32)
+      if (std::filesystem::exists("C:/Program Files/Tesseract-OCR/tesseract.exe")) {
+        binary = "C:/Program Files/Tesseract-OCR/tesseract.exe";
+      } else if (std::filesystem::exists("C:/Program Files (x86)/Tesseract-OCR/tesseract.exe")) {
+        binary = "C:/Program Files (x86)/Tesseract-OCR/tesseract.exe";
+      }
+#else
       if (std::filesystem::exists("/opt/homebrew/bin/tesseract")) {
         binary = "/opt/homebrew/bin/tesseract";
       } else if (std::filesystem::exists("/usr/local/bin/tesseract")) {
         binary = "/usr/local/bin/tesseract";
       }
+#endif
     }
 
     std::set<std::string> seen;

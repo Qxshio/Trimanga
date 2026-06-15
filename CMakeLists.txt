@@ -58,3 +58,23 @@ else()
 endif()
 
 install(TARGETS scanlation_tool RUNTIME DESTINATION bin)
+
+set(CPACK_PACKAGE_NAME "scanlation-tool")
+set(CPACK_PACKAGE_VENDOR "Scanlation Tool")
+set(CPACK_PACKAGE_CONTACT "maintainers@example.com")
+set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "${PROJECT_DESCRIPTION}")
+set(CPACK_PACKAGE_HOMEPAGE_URL "https://github.com/example/scanlation-tool")
+set(CPACK_PACKAGE_VERSION "${PROJECT_VERSION}")
+set(CPACK_RESOURCE_FILE_README "${CMAKE_CURRENT_SOURCE_DIR}/README.md")
+
+if(WIN32)
+  set(CPACK_GENERATOR "ZIP")
+elseif(APPLE)
+  set(CPACK_GENERATOR "TGZ")
+else()
+  set(CPACK_GENERATOR "TGZ;DEB;RPM")
+  set(CPACK_DEBIAN_PACKAGE_DEPENDS "tesseract-ocr, unzip")
+  set(CPACK_RPM_PACKAGE_REQUIRES "tesseract, unzip")
+endif()
+
+include(CPack)

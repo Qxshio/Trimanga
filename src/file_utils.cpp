@@ -24,6 +24,21 @@ std::string lower_ext(const fs::path& path) {
   return ext;
 }
 
+#if defined(_WIN32)
+std::string powershell_quote(const std::string& value) {
+  std::string quoted = "'";
+  for (char ch : value) {
+    if (ch == '\'') {
+      quoted += "''";
+    } else {
+      quoted += ch;
+    }
+  }
+  quoted += "'";
+  return quoted;
+}
+#endif
+
 }  // namespace
 
 bool is_image_path(const fs::path& path) {
@@ -70,9 +85,26 @@ void copy_file_create_dirs(const fs::path& from, const fs::path& to) {
 
 std::vector<fs::path> extract_cbz(const fs::path& cbz, const fs::path& destination) {
   fs::create_directories(destination);
-  const ProcessResult result = run_process({"unzip", "-qq", "-o", cbz.string(), "-d", destination.string()});
+  ProcessResult result;
+#if defined(_WIN32)
+  fs::path zip_copy = destination / "_archive.zip";
+  fs::copy_file(cbz, zip_copy, fs::copy_options::overwrite_existing);
+  result = run_process({"powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command",
+                        "Expand-Archive -LiteralPath " + powershell_quote(zip_copy.string()) +
+                            " -DestinationPath " + powershell_quote(destination.string()) + " -Force"});
+  std::error_code ignored;
+  fs::remove(zip_copy, ignored);
+#else
+  if (command_exists("unzip")) {
+    result = run_process({"unzip", "-qq", "-o", cbz.string(), "-d", destination.string()});
+  } else if (command_exists("7z")) {
+    result = run_process({"7z", "x", "-y", "-o" + destination.string(), cbz.string()});
+  } else {
+    throw std::runtime_error("archive extraction requires unzip or 7z");
+  }
+#endif
   if (result.exit_code != 0) {
-    throw std::runtime_error("failed to extract archive with unzip: " + cbz.string());
+    throw std::runtime_error("failed to extract archive: " + cbz.string());
   }
   return list_images_recursive(destination);
 }

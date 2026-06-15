@@ -1,5 +1,6 @@
 #include "scanlation_tool/scanner.hpp"
 
+#include <algorithm>
 #include <cstdlib>
 #include <filesystem>
 #include <iostream>
