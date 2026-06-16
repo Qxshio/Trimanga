@@ -388,9 +388,25 @@ void render_action_badge(SDL_Renderer* renderer, const Rect& card, ReviewAction 
   }
 }
 
+void render_torn_edges(SDL_Renderer* renderer, const Rect& left, const Rect& right, double progress) {
+  SDL_Color edge_color{224, 77, 105, static_cast<Uint8>(120 + 90 * progress)};
+  SDL_Color paper_edge{255, 252, 246, static_cast<Uint8>(180 + 60 * progress)};
+  const int step = 18;
+  for (int y = left.y; y < left.y + left.h; y += step) {
+    const int jag = ((y / step) % 2 == 0 ? 7 : -5);
+    line(renderer, left.x + left.w - 1, y, left.x + left.w + jag, std::min(y + step, left.y + left.h), paper_edge);
+    line(renderer, left.x + left.w + 2, y, left.x + left.w + jag + 2, std::min(y + step, left.y + left.h), edge_color);
+  }
+  for (int y = right.y; y < right.y + right.h; y += step) {
+    const int jag = ((y / step) % 2 == 0 ? -7 : 5);
+    line(renderer, right.x, y, right.x + jag, std::min(y + step, right.y + right.h), paper_edge);
+    line(renderer, right.x - 2, y, right.x + jag - 2, std::min(y + step, right.y + right.h), edge_color);
+  }
+}
+
 void render_page_card(SDL_Renderer* renderer, TextureCache& cache, std::vector<Candidate>& candidates,
                       std::size_t index, double offset, const Rect& content, double focus_pulse,
-                      double badge_pulse) {
+                      double badge_pulse, double tear_progress) {
   const bool selected = std::abs(offset) < 0.15;
   const double distance = std::min(1.0, std::abs(offset));
   const double scale = (selected ? 1.0 : 0.72 - 0.10 * distance) + (selected ? 0.018 * focus_pulse : 0.0);
@@ -412,6 +428,50 @@ void render_page_card(SDL_Renderer* renderer, TextureCache& cache, std::vector<C
   const int center_x = content.x + content.w / 2 + static_cast<int>(offset * std::min(390, content.w / 3));
   const int top = content.y + (content.h - card_height) / 2 + static_cast<int>(distance * 18);
   const Rect card{center_x - card_width / 2, top, card_width, card_height};
+
+  const double tear = ease_out(tear_progress);
+  if (tear > 0.0) {
+    const double fall = ease_in(std::clamp((tear_progress - 0.22) / 0.78, 0.0, 1.0));
+    const int split = static_cast<int>(10 + tear * (content.w * 0.58));
+    const int fall_left = static_cast<int>(fall * (content.h * 1.65));
+    const int fall_right = static_cast<int>(fall * (content.h * 1.82));
+    const int tilt = static_cast<int>(tear * 10);
+    const Rect left_card{card.x - split, card.y + fall_left - tilt, card.w / 2, card.h};
+    const Rect right_card{card.x + card.w / 2 + split, card.y + fall_right + tilt, card.w - card.w / 2, card.h};
+
+    fill(renderer, Rect{left_card.x + 8, left_card.y + 10, left_card.w, left_card.h}, SDL_Color{116, 62, 88, 42});
+    fill(renderer, Rect{right_card.x + 8, right_card.y + 10, right_card.w, right_card.h}, SDL_Color{116, 62, 88, 42});
+    fill(renderer, left_card, kPaper);
+    fill(renderer, right_card, kPaper);
+
+    const Rect image_bounds{card.x + 12, card.y + 12, card.w - 24, card.h - 24};
+    if (texture != nullptr && texture->texture != nullptr) {
+      const Rect destination = fit_image(texture->width, texture->height, image_bounds);
+      const int left_clip = std::clamp(card.x + card.w / 2 - destination.x, 0, destination.w);
+      const int right_clip = destination.w - left_clip;
+      if (left_clip > 0) {
+        SDL_Rect source{0, 0, static_cast<int>((static_cast<double>(left_clip) / destination.w) * texture->width),
+                        texture->height};
+        SDL_Rect dest{left_card.x + std::max(0, destination.x - card.x), left_card.y + destination.y - card.y,
+                      left_clip, destination.h};
+        SDL_SetTextureAlphaMod(texture->texture, static_cast<Uint8>(255 * (1.0 - fall * 0.35)));
+        SDL_RenderCopy(renderer, texture->texture, &source, &dest);
+      }
+      if (right_clip > 0) {
+        const int source_x = static_cast<int>((static_cast<double>(left_clip) / destination.w) * texture->width);
+        SDL_Rect source{source_x, 0, texture->width - source_x, texture->height};
+        SDL_Rect dest{right_card.x + std::max(0, destination.x + left_clip - (card.x + card.w / 2)),
+                      right_card.y + destination.y - card.y, right_clip, destination.h};
+        SDL_SetTextureAlphaMod(texture->texture, static_cast<Uint8>(255 * (1.0 - fall * 0.35)));
+        SDL_RenderCopy(renderer, texture->texture, &source, &dest);
+      }
+      SDL_SetTextureAlphaMod(texture->texture, selected ? 255 : 165);
+    }
+    outline(renderer, left_card, SDL_Color{230, 190, 207, 255});
+    outline(renderer, right_card, SDL_Color{230, 190, 207, 255});
+    render_torn_edges(renderer, left_card, right_card, tear);
+    return;
+  }
 
   SDL_Color backing = selected ? kPaper : SDL_Color{255, 239, 246, static_cast<Uint8>(230 - distance * 70)};
   const int shadow_offset = selected ? 12 + static_cast<int>(4.0 * focus_pulse) : 8;
@@ -441,35 +501,6 @@ void render_progress(SDL_Renderer* renderer, std::size_t index, std::size_t tota
   fill(renderer, track, SDL_Color{226, 195, 210, 255});
   const int filled = static_cast<int>(track.w * (static_cast<double>(index + 1) / static_cast<double>(total)));
   fill(renderer, Rect{track.x, track.y, filled, track.h}, kAccent);
-}
-
-void render_rip_overlay(SDL_Renderer* renderer, const Rect& content, double progress) {
-  progress = ease_in(progress);
-  if (progress <= 0.0) {
-    return;
-  }
-
-  const int center_x = content.x + content.w / 2;
-  const int top = content.y + content.h / 2 - static_cast<int>(content.h * 0.33);
-  const int bottom = content.y + content.h / 2 + static_cast<int>(content.h * 0.33);
-  const int tear = static_cast<int>(16 + progress * 46);
-  SDL_Color tear_color{255, 252, 246, static_cast<Uint8>(230 * progress)};
-  SDL_Color edge_color{224, 77, 105, static_cast<Uint8>(190 * progress)};
-
-  for (int y = top; y < bottom; y += 18) {
-    const int wiggle = ((y / 18) % 2 == 0 ? tear : -tear / 2);
-    line(renderer, center_x + wiggle, y, center_x - wiggle, y + 18, tear_color);
-    line(renderer, center_x + wiggle + 3, y, center_x - wiggle + 3, y + 18, edge_color);
-  }
-
-  const int burst = static_cast<int>(progress * 90);
-  for (int index = 0; index < 10; ++index) {
-    const int side = index % 2 == 0 ? -1 : 1;
-    const int y = top + index * ((bottom - top) / 10);
-    const int x1 = center_x + side * (18 + burst / 2);
-    const int x2 = center_x + side * (48 + burst);
-    line(renderer, x1, y, x2, y - 16 + (index % 3) * 11, edge_color);
-  }
 }
 
 void render_button(SDL_Renderer* renderer, const Rect& rect, SDL_Color base, SDL_Color accent, const std::string& label,
@@ -739,7 +770,7 @@ bool review_candidates(std::vector<Candidate>& candidates) {
     entry_time += delta_seconds;
     if (confirming) {
       confirm_time += delta_seconds;
-      if (confirm_time >= 0.78) {
+      if (confirm_time >= 1.12) {
         running = false;
       }
     }
@@ -780,8 +811,8 @@ bool review_candidates(std::vector<Candidate>& candidates) {
     render_header(renderer, layout.header, selected_index, candidates.size(), candidates[selected_index].review_action,
                   header_alpha);
 
-    const double gather_progress = confirming ? ease_out(std::min(1.0, confirm_time / 0.36)) : 0.0;
-    const double rip_progress = confirming ? std::clamp((confirm_time - 0.30) / 0.38, 0.0, 1.0) : 0.0;
+    const double gather_progress = confirming ? ease_out(std::min(1.0, confirm_time / 0.34)) : 0.0;
+    const double tear_progress = confirming ? std::clamp((confirm_time - 0.28) / 0.78, 0.0, 1.0) : 0.0;
     const int base = static_cast<int>(std::round(carousel_position));
     for (int offset = 3; offset >= -3; --offset) {
       const int candidate_index = base + offset;
@@ -794,12 +825,11 @@ bool review_candidates(std::vector<Candidate>& candidates) {
       const double visual_offset = (static_cast<double>(candidate_index) - carousel_position) * (1.0 - gather_progress);
       render_page_card(renderer, cache, candidates, static_cast<std::size_t>(candidate_index),
                        visual_offset, layout.content,
-                       ease_out(focus_pulse) * content_alpha, ease_out(badge_pulse) * content_alpha);
+                       ease_out(focus_pulse) * content_alpha, ease_out(badge_pulse) * content_alpha, tear_progress);
     }
     const double active_offset = (static_cast<double>(selected_index) - carousel_position) * (1.0 - gather_progress);
     render_page_card(renderer, cache, candidates, selected_index, active_offset, layout.content,
-                     ease_out(focus_pulse) * content_alpha, ease_out(badge_pulse) * content_alpha);
-    render_rip_overlay(renderer, layout.content, rip_progress);
+                     ease_out(focus_pulse) * content_alpha, ease_out(badge_pulse) * content_alpha, tear_progress);
 
     const Rect progress{layout.action.x + 18, layout.action.y + 12, layout.action.w - 36, 6};
     render_action_area(renderer, layout.action, delete_button, toggle_all_button, candidates[selected_index].review_action,
