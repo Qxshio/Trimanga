@@ -261,13 +261,13 @@ int keycap_width(const std::string& label) {
 std::string action_name(ReviewAction action) {
   switch (action) {
     case ReviewAction::Keep:
-      return "Keep";
+      return "Kept";
     case ReviewAction::Delete:
-      return "Delete";
+      return "Marked for deletion";
     case ReviewAction::Undecided:
-      return "Keep";
+      return "Kept";
   }
-  return "Keep";
+  return "Kept";
 }
 
 SDL_Texture* load_texture(SDL_Renderer* renderer, const std::filesystem::path& path, int& width, int& height) {
@@ -361,7 +361,7 @@ Rect fit_image(int image_width, int image_height, const Rect& bounds) {
 
 void update_title(SDL_Window* window, const Candidate& candidate, std::size_t index, std::size_t total) {
   std::ostringstream title;
-  title << "Trimanga Review - " << (index + 1) << "/" << total << " - " << candidate.page.archive_name
+  title << "Review Detected Scanlations - " << (index + 1) << "/" << total << " - " << candidate.page.archive_name
         << " - " << action_name(candidate.review_action)
         << "   Wheel/Arrows/HJKL=Carousel  X/D=Toggle Delete  T=Toggle All  Hold Esc=Confirm";
   SDL_SetWindowTitle(window, title.str().c_str());
@@ -559,8 +559,8 @@ void render_header(SDL_Renderer* renderer, const Rect& header, std::size_t index
   fill(renderer, header, panel);
   outline(renderer, header, SDL_Color{99, 78, 113, static_cast<Uint8>(255 * alpha)});
 
-  draw_text(renderer, header.x + 18, header.y + 16, "TRIMANGA REVIEW", kLightText, 3);
-  draw_text(renderer, header.x + 20, header.y + 50, "UNMARKED PAGES ARE KEPT", SDL_Color{230, 205, 221, 255}, 2);
+  draw_text(renderer, header.x + 18, header.y + 16, "REVIEW DETECTED SCANLATIONS", kLightText, 3);
+  draw_text(renderer, header.x + 20, header.y + 50, "MARK PAGES FOR DELETION", SDL_Color{230, 205, 221, 255}, 2);
 
   const bool deleted = action == ReviewAction::Delete;
   const std::string status = deleted ? "MARKED DELETE" : "KEEP";
@@ -642,7 +642,7 @@ bool review_candidates(std::vector<Candidate>& candidates) {
   SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "1");
 
   SDL_Window* window =
-      SDL_CreateWindow("Trimanga Review", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, 1220, 860,
+      SDL_CreateWindow("Review Detected Scanlations", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, 1220, 860,
                        SDL_WINDOW_RESIZABLE);
   if (window == nullptr) {
     SDL_Quit();
@@ -707,7 +707,7 @@ bool review_candidates(std::vector<Candidate>& candidates) {
     escape_hold_time = 0.0;
     hovered_button = ButtonId::None;
     pressed_button = ButtonId::None;
-    SDL_SetWindowTitle(window, "Trimanga Review - confirming selection");
+    SDL_SetWindowTitle(window, "Review Detected Scanlations - confirming selection");
     if (!window_hidden) {
       SDL_HideWindow(window);
       window_hidden = true;
@@ -733,7 +733,7 @@ bool review_candidates(std::vector<Candidate>& candidates) {
             if (event.key.repeat == 0) {
               escape_held = true;
               escape_hold_time = 0.0;
-              SDL_SetWindowTitle(window, "Trimanga Review - hold Esc to confirm");
+              SDL_SetWindowTitle(window, "Review Detected Scanlations - hold Esc to confirm");
             }
             break;
           case SDLK_q:
@@ -896,6 +896,8 @@ bool review_candidates(std::vector<Candidate>& candidates) {
     const double hold_progress = escape_held && !confirming ? std::clamp(escape_hold_time / 1.0, 0.0, 1.0) : 0.0;
     const double shake = hold_progress * 5.0;
     const int base = static_cast<int>(std::round(carousel_position));
+    const SDL_Rect content_clip{layout.content.x, layout.content.y, layout.content.w, layout.content.h};
+    SDL_RenderSetClipRect(renderer, &content_clip);
     for (int offset = 3; offset >= -3; --offset) {
       const int candidate_index = base + offset;
       if (candidate_index < 0 || candidate_index >= static_cast<int>(candidates.size())) {
@@ -915,6 +917,7 @@ bool review_candidates(std::vector<Candidate>& candidates) {
     render_page_card(renderer, cache, candidates, selected_index, active_offset, layout.content,
                      ease_out(focus_pulse) * content_alpha, ease_out(badge_pulse) * content_alpha,
                      delete_slides[selected_index], tear_progress, shake * delete_slides[selected_index]);
+    SDL_RenderSetClipRect(renderer, nullptr);
 
     const Rect progress{layout.action.x + 18, layout.action.y + 12, layout.action.w - 36, 6};
     render_action_area(renderer, layout.action, delete_button, toggle_all_button, candidates[selected_index].review_action,
