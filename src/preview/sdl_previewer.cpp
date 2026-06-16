@@ -10,6 +10,20 @@
 
 namespace trimanga {
 
+namespace {
+
+void drain_destroy_events() {
+  for (int frame = 0; frame < 12; ++frame) {
+    SDL_Event event;
+    while (SDL_PollEvent(&event) != 0) {
+    }
+    SDL_PumpEvents();
+    SDL_Delay(1);
+  }
+}
+
+}  // namespace
+
 bool review_candidates(std::vector<Candidate>& candidates) {
   using namespace preview;
 
@@ -103,7 +117,7 @@ bool review_candidates(std::vector<Candidate>& candidates) {
       SDL_DestroyWindow(window);
       window = nullptr;
     }
-    SDL_PumpEvents();
+    drain_destroy_events();
     SDL_QuitSubSystem(SDL_INIT_VIDEO);
     SDL_Quit();
   };
