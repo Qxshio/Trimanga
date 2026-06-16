@@ -98,15 +98,12 @@ bool run_review_window(std::vector<Candidate>& candidates) {
       return;
     }
     window_closed = true;
-    cache.clear();
-    if (renderer != nullptr) {
-      SDL_DestroyRenderer(renderer);
-      renderer = nullptr;
-    }
     if (window != nullptr) {
       SDL_DestroyWindow(window);
       window = nullptr;
     }
+    renderer = nullptr;
+    cache.release();
     SDL_QuitSubSystem(SDL_INIT_VIDEO);
     SDL_Quit();
   };
@@ -230,8 +227,6 @@ bool run_review_window(std::vector<Candidate>& candidates) {
       escape_hold_time += delta_seconds;
       if (escape_hold_time >= 1.0) {
         start_confirm();
-        close_preview_now();
-        return true;
       }
     }
     if (confirming) {

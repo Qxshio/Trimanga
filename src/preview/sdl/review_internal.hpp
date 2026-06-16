@@ -83,6 +83,7 @@ class TextureCache {
   ~TextureCache();
 
   void clear();
+  void release();
   TextureEntry& get(std::size_t index);
   TextureEntry* peek(std::size_t index);
   void preload_near(std::size_t center, std::size_t radius);

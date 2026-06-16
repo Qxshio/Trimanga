@@ -43,6 +43,12 @@ void TextureCache::clear() {
   }
 }
 
+void TextureCache::release() {
+  for (TextureEntry& entry : entries_) {
+    entry = {};
+  }
+}
+
 TextureEntry& TextureCache::get(std::size_t index) {
   TextureEntry& entry = entries_[index];
   if (entry.texture == nullptr) {
