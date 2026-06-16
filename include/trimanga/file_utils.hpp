@@ -12,6 +12,7 @@ std::vector<std::filesystem::path> list_images_recursive(const std::filesystem::
 std::filesystem::path make_temp_dir(const std::string& prefix);
 void copy_file_create_dirs(const std::filesystem::path& from, const std::filesystem::path& to);
 std::vector<std::filesystem::path> extract_cbz(const std::filesystem::path& cbz, const std::filesystem::path& destination);
+void replace_archive_from_directory(const std::filesystem::path& source_dir, const std::filesystem::path& archive_path);
 std::string path_label(const std::filesystem::path& path);
 
 }  // namespace trimanga

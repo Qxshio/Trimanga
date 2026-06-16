@@ -1,6 +1,6 @@
 # Trimanga
 
-Trimanga is a command-line tool for cleaning manga archives. It scans folders, images, `.zip`, and `.cbz` files for likely scanlation credits, recruitment pages, support ads and repeated release clutter, then gives you a reviewable set of pages. By default it only offers suggestions; interactive review can safely move deleted folder pages into `.trimanga-trash`.
+Trimanga is a command-line tool for cleaning manga archives. It scans folders, images, `.zip`, and `.cbz` files for likely scanlation credits, recruitment pages, support ads and repeated release clutter, then gives you a reviewable set of pages. By default it only offers suggestions; interactive review can safely apply delete decisions after you confirm them.
 
 It is built for people who care about clean, portable manga libraries: fewer interruption pages, smaller archives, better reader navigation.
 
@@ -60,11 +60,12 @@ Supported image types:
 - Apple Clang or Xcode Command Line Tools
 - CMake 3.22+ recommended
 - `unzip` or `7z` for archive extraction
+- `zip` or `7z` for archive rebuilding
 - SDL2, optional, for the graphical previewer
 
 ```sh
 xcode-select --install
-brew install cmake unzip sdl2
+brew install cmake unzip zip sdl2
 ```
 
 ### Linux
@@ -78,13 +79,13 @@ Debian/Ubuntu:
 
 ```sh
 sudo apt-get update
-sudo apt-get install -y cmake g++ unzip libsdl2-dev
+sudo apt-get install -y cmake g++ unzip zip libsdl2-dev
 ```
 
 Fedora:
 
 ```sh
-sudo dnf install cmake gcc-c++ unzip SDL2-devel
+sudo dnf install cmake gcc-c++ unzip zip SDL2-devel
 ```
 
 ### Windows
@@ -169,7 +170,7 @@ Options:
 The default table output is intentionally compact. Use `--details` when you want to inspect the detector signals that caused each page to be flagged.
 Use `--timings` to see where time is spent across extraction, page profiling, page analysis, visual matching and review export.
 Use `--progress` or `--verbose` when you want live scan feedback.
-Use `--preview` when you want to inspect every candidate image immediately. The preview opens as a carousel: mouse wheel, arrow keys, or `H/J/K/L` move through matches; unmarked pages are kept by default; `Space`, `X`, or `D` toggles the delete mark; `T` or `A` toggles all candidates between delete and keep. Folder and single-image inputs move deleted files into `.trimanga-trash`. Archive inputs are reviewed without modifying the archive.
+Use `--preview` when you want to inspect every candidate image immediately. The preview opens as a carousel: mouse wheel, arrow keys, or `H/J/K/L` move through matches; unmarked pages are kept by default; `Space`, `X`, or `D` toggles the delete mark; `T` or `A` toggles all candidates between delete and keep; hold `Esc` to confirm. Folder and single-image inputs move deleted files into `.trimanga-trash`. `.cbz` and `.zip` inputs are rebuilt with marked pages removed.
 
 Speed controls how aggressively Trimanga creates workers:
 
@@ -198,7 +199,7 @@ Expected package formats:
 
 ## Safety Model
 
-Trimanga does not delete pages by default. It identifies pages that deserve attention and can copy them to a review folder. With `--preview`, folder and single-image inputs move pages marked Delete into a local `.trimanga-trash` folder. `.cbz` and `.zip` inputs are not rewritten by the previewer, so review decisions are reported but the archive remains unchanged.
+Trimanga does not delete pages by default. It identifies pages that deserve attention and can copy them to a review folder. With `--preview`, folder and single-image inputs move pages marked Delete into a local `.trimanga-trash` folder. `.cbz` and `.zip` inputs are rebuilt after confirmation with marked pages removed.
 
 The classifier is tuned around three principles:
 

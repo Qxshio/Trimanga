@@ -7,6 +7,7 @@
 #include <chrono>
 #include <filesystem>
 #include <random>
+#include <sstream>
 #include <stdexcept>
 #include <string>
 
@@ -107,6 +108,55 @@ std::vector<fs::path> extract_cbz(const fs::path& cbz, const fs::path& destinati
     throw std::runtime_error("failed to extract archive: " + cbz.string());
   }
   return list_images_recursive(destination);
+}
+
+void replace_archive_from_directory(const fs::path& source_dir, const fs::path& archive_path) {
+  if (!fs::is_directory(source_dir)) {
+    throw std::runtime_error("archive rebuild source is not a directory: " + source_dir.string());
+  }
+
+  fs::path temp_archive = archive_path;
+  temp_archive += ".trimanga-tmp.zip";
+  std::error_code ignored;
+  fs::remove(temp_archive, ignored);
+
+  ProcessResult result;
+#if defined(_WIN32)
+  result = run_process({"powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command",
+                        "Compress-Archive -Path " + powershell_quote((source_dir / "*").string()) +
+                            " -DestinationPath " + powershell_quote(temp_archive.string()) + " -Force"});
+#else
+  if (command_exists("zip")) {
+    std::ostringstream command;
+    command << "cd " << shell_quote(source_dir.string()) << " && zip -qr " << shell_quote(temp_archive.string()) << " .";
+    result = run_process({"sh", "-c", command.str()});
+  } else if (command_exists("7z")) {
+    std::ostringstream command;
+    command << "cd " << shell_quote(source_dir.string()) << " && 7z a -tzip -bd -y "
+            << shell_quote(temp_archive.string()) << " .";
+    result = run_process({"sh", "-c", command.str()});
+  } else {
+    throw std::runtime_error("archive rebuild requires zip or 7z");
+  }
+#endif
+
+  if (result.exit_code != 0 || !fs::exists(temp_archive)) {
+    fs::remove(temp_archive, ignored);
+    throw std::runtime_error("failed to rebuild archive: " + archive_path.string());
+  }
+
+  fs::path backup = archive_path;
+  backup += ".trimanga-bak";
+  fs::remove(backup, ignored);
+  fs::rename(archive_path, backup);
+  try {
+    fs::rename(temp_archive, archive_path);
+  } catch (...) {
+    fs::rename(backup, archive_path, ignored);
+    fs::remove(temp_archive, ignored);
+    throw;
+  }
+  fs::remove(backup, ignored);
 }
 
 std::string path_label(const fs::path& path) {

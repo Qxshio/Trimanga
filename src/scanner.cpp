@@ -296,7 +296,7 @@ fs::path review_trash_root(const fs::path& input) {
   return input.parent_path() / ".trimanga-trash";
 }
 
-void apply_review_actions(ScanResult& result, const fs::path& input) {
+void apply_review_actions(ScanResult& result, const fs::path& input, const fs::path& archive_root) {
   for (const Candidate& candidate : result.candidates) {
     if (candidate.review_action == ReviewAction::Delete) {
       ++result.marked_delete;
@@ -304,15 +304,40 @@ void apply_review_actions(ScanResult& result, const fs::path& input) {
   }
   result.marked_keep = result.candidates.size() - result.marked_delete;
 
-  if (result.archive_input || result.marked_delete == 0) {
+  if (result.marked_delete == 0) {
+    return;
+  }
+
+  if (result.archive_input) {
+    if (archive_root.empty()) {
+      throw std::runtime_error("archive review did not have an extracted source directory");
+    }
+    std::error_code ignored;
+    std::unordered_set<std::string> removed_paths;
+    for (const Candidate& candidate : result.candidates) {
+      if (candidate.review_action != ReviewAction::Delete || !fs::exists(candidate.page.image_path)) {
+        continue;
+      }
+      if (!removed_paths.insert(candidate.page.image_path.string()).second) {
+        continue;
+      }
+      if (fs::remove(candidate.page.image_path, ignored)) {
+        ++result.deleted_files;
+      }
+    }
+    replace_archive_from_directory(archive_root, input);
     return;
   }
 
   const fs::path trash_root = review_trash_root(input);
   std::error_code ignored;
   fs::create_directories(trash_root, ignored);
+  std::unordered_set<std::string> removed_paths;
   for (const Candidate& candidate : result.candidates) {
     if (candidate.review_action != ReviewAction::Delete || !fs::exists(candidate.page.image_path)) {
+      continue;
+    }
+    if (!removed_paths.insert(candidate.page.image_path.string()).second) {
       continue;
     }
     fs::path destination = unique_destination(trash_root / candidate.page.image_path.filename());
@@ -647,7 +672,7 @@ ScanResult scan(const fs::path& input, const ScanOptions& options) {
     result.copied_review_pages = true;
   }
   if (result.previewed) {
-    apply_review_actions(result, input);
+    apply_review_actions(result, input, temp.path());
   }
   const auto finished_at = std::chrono::steady_clock::now();
   result.review_copy_time = finished_at - visual_matched_at;
@@ -663,8 +688,8 @@ void print_result_table(const ScanResult& result) {
   std::cout << "Pages recommended for review: " << result.candidates.size() << "\n\n";
   if (result.previewed) {
     std::cout << "Preview decisions: " << result.marked_keep << " kept, " << result.marked_delete << " marked delete";
-    if (result.archive_input && result.marked_delete > 0) {
-      std::cout << " (archive was not modified)";
+    if (result.archive_input && result.deleted_files > 0) {
+      std::cout << " (" << result.deleted_files << " removed from archive)";
     } else if (result.deleted_files > 0) {
       std::cout << " (" << result.deleted_files << " moved to .trimanga-trash)";
     }
