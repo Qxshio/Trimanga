@@ -70,8 +70,15 @@ enum class OutputFormat {
   Json,
 };
 
+enum class ScanSpeed {
+  Eco,
+  Balanced,
+  Fast,
+  Fastest,
+};
+
 struct ScanOptions {
-  int workers = 4;
+  ScanSpeed speed = ScanSpeed::Balanced;
   OutputFormat format = OutputFormat::Table;
   std::optional<std::filesystem::path> review_dir;
   bool keep_temp = false;

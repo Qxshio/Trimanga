@@ -131,7 +131,7 @@ Scan a manga folder and copy suspicious pages into a review folder:
 
 ```sh
 trimanga scan "./I Hear the Sunspot" \
-  --workers 4 \
+  --speed balanced \
   --review-dir /tmp/sunspot-review
 ```
 
@@ -144,7 +144,8 @@ trimanga scan "./Volume 01.cbz" --format json
 Options:
 
 ```text
---workers N                  Number of analysis workers. Default: 4
+--speed eco|balanced|fast|fastest
+                             Scan speed. Default: balanced
 --format table|json          Output format. Default: table
 --review-dir PATH            Copy suspicious pages into this folder
 --details                    Include detector signals in table output
@@ -159,7 +160,14 @@ The default table output is intentionally compact. Use `--details` when you want
 Use `--timings` to see where time is spent across extraction, page profiling, page analysis, visual matching and review export.
 Use `--progress` or `--verbose` when you want live scan feedback.
 
-Worker requests are capped internally to keep the terminal responsive. Extremely high values such as `--workers 10000` will not create thousands of threads.
+Speed controls how aggressively Trimanga creates workers:
+
+- `eco`: lower resource use
+- `balanced`: based on your CPU
+- `fast`: more aggressive parallelism
+- `fastest`: one worker per page
+
+`fastest` is intentionally extreme. On a 1,156-page archive, it can create 1,156 workers. It may finish quickly on some machines, but it can also cause heat, memory pressure, or sluggish terminal behavior.
 
 ## Package Builds
 

@@ -14,5 +14,5 @@
 - Removed external recognition dependencies.
 - Added a portable image decoder for consistent macOS, Linux and Windows behavior.
 - Made scans quiet by default, with `--progress` and `--verbose` for live feedback.
-- Capped excessive worker requests to keep the terminal responsive.
+- Replaced raw worker counts with `--speed eco|balanced|fast|fastest`.
 - Added `--timings` for scan phase benchmarks.

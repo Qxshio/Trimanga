@@ -18,7 +18,8 @@ void print_help() {
       << "Usage:\n"
       << "  trimanga scan <folder-or-cbz> [options]\n\n"
       << "Options:\n"
-      << "  --workers <n>                  Number of analysis workers. Default: 4\n"
+      << "  --speed <eco|balanced|fast|fastest>\n"
+      << "                                  Scan speed. Default: balanced\n"
       << "  --format <table|json>          Output format. Default: table\n"
       << "  --review-dir <path>            Copy suspicious pages into this folder\n"
       << "  --details                      Include detector signals in table output\n"
@@ -31,7 +32,7 @@ void print_help() {
       << "  --version                      Show version\n\n"
       << "Examples:\n"
       << "  trimanga scan ~/Documents/Mangas/Volume.cbz --review-dir /tmp/review\n"
-      << "  trimanga scan ./MangaFolder --workers 8 --format json\n";
+      << "  trimanga scan ./MangaFolder --speed fastest --format json\n";
 }
 
 trimanga::OutputFormat parse_format(const std::string& value) {
@@ -42,6 +43,22 @@ trimanga::OutputFormat parse_format(const std::string& value) {
     return trimanga::OutputFormat::Json;
   }
   throw std::runtime_error("invalid output format: " + value);
+}
+
+trimanga::ScanSpeed parse_speed(const std::string& value) {
+  if (value == "eco" || value == "quiet" || value == "cool") {
+    return trimanga::ScanSpeed::Eco;
+  }
+  if (value == "balanced" || value == "normal") {
+    return trimanga::ScanSpeed::Balanced;
+  }
+  if (value == "fast") {
+    return trimanga::ScanSpeed::Fast;
+  }
+  if (value == "fastest" || value == "max" || value == "ludicrous") {
+    return trimanga::ScanSpeed::Fastest;
+  }
+  throw std::runtime_error("invalid speed: " + value);
 }
 
 std::string require_value(int& index, int argc, char** argv, const std::string& option) {
@@ -79,8 +96,8 @@ int main(int argc, char** argv) {
         print_help();
         return 0;
       }
-      if (arg == "--workers") {
-        options.workers = std::max(1, std::stoi(require_value(index, argc, argv, arg)));
+      if (arg == "--speed") {
+        options.speed = parse_speed(require_value(index, argc, argv, arg));
       } else if (arg == "--format") {
         options.format = parse_format(require_value(index, argc, argv, arg));
       } else if (arg == "--review-dir") {

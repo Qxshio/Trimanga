@@ -33,8 +33,6 @@ namespace trimanga {
 
 namespace {
 
-constexpr int kMaxWorkers = 256;
-
 class TempDirectory {
  public:
   TempDirectory() = default;
@@ -410,20 +408,47 @@ void progress_line(const ScanOptions& options, TerminalOutput& terminal, std::si
   terminal.write(line.str());
 }
 
-int worker_count_for(const ScanOptions& options, std::size_t page_count) {
+std::string speed_name(ScanSpeed speed) {
+  switch (speed) {
+    case ScanSpeed::Eco:
+      return "eco";
+    case ScanSpeed::Balanced:
+      return "balanced";
+    case ScanSpeed::Fast:
+      return "fast";
+    case ScanSpeed::Fastest:
+      return "fastest";
+  }
+  return "balanced";
+}
+
+int worker_count_for(ScanSpeed speed, std::size_t page_count) {
   if (page_count == 0) {
     return 1;
   }
-  return std::min<int>({std::max(1, options.workers), static_cast<int>(page_count), kMaxWorkers});
+  const unsigned int hardware = std::max(1U, std::thread::hardware_concurrency());
+  int requested = static_cast<int>(hardware);
+  switch (speed) {
+    case ScanSpeed::Eco:
+      requested = std::min(2U, hardware);
+      break;
+    case ScanSpeed::Balanced:
+      requested = static_cast<int>(hardware);
+      break;
+    case ScanSpeed::Fast:
+      requested = static_cast<int>(hardware * 2U);
+      break;
+    case ScanSpeed::Fastest:
+      requested = static_cast<int>(page_count);
+      break;
+  }
+  return std::min<int>(std::max(1, requested), static_cast<int>(page_count));
 }
 
 }  // namespace
 
 ScanResult scan(const fs::path& input, const ScanOptions& options) {
   const auto started_at = std::chrono::steady_clock::now();
-  if (options.workers < 1) {
-    throw std::runtime_error("workers must be at least 1");
-  }
   if (!fs::exists(input)) {
     throw std::runtime_error("input does not exist: " + input.string());
   }
@@ -448,7 +473,7 @@ ScanResult scan(const fs::path& input, const ScanOptions& options) {
     return empty;
   }
 
-  const int workers = worker_count_for(options, pages.size());
+  const int workers = worker_count_for(options.speed, pages.size());
   auto detector = make_page_detector();
 
   ScanResult result;
@@ -467,11 +492,8 @@ ScanResult scan(const fs::path& input, const ScanOptions& options) {
   std::vector<std::thread> threads;
   threads.reserve(static_cast<std::size_t>(workers));
 
-  status_line(options, "Found " + std::to_string(pages.size()) + " pages. Analyzing with " + std::to_string(workers) +
-                           " workers...");
-  if (options.verbose && options.workers > workers) {
-    status_line(options, "Worker request capped at " + std::to_string(workers) + " to keep the terminal responsive.");
-  }
+  status_line(options, "Found " + std::to_string(pages.size()) + " pages. Analyzing in " +
+                           speed_name(options.speed) + " mode with " + std::to_string(workers) + " workers...");
   status_line(options, "Using Trimanga's built-in scanlation and ad detector.");
   TerminalOutput terminal(options.format == OutputFormat::Table && options.progress);
   ScopedSystemOutputSilencer silence_system_warnings(false);
