@@ -31,4 +31,4 @@ tests/smoke.sh
 - Smoke tests or CTest pass.
 - User-facing CLI behavior is documented.
 - Detection changes explain expected false-positive and false-negative impact.
-- New packaging metadata uses the Trimanga name consistently.
+- New user-facing files use the Trimanga name and terminology consistently.

@@ -89,7 +89,6 @@ sudo dnf install cmake gcc-c++ SDL2-devel
 
 - Visual Studio 2022 Build Tools or another C++20 compiler
 - CMake 3.22+
-- PowerShell, included with Windows, for archive extraction
 
 ## Build
 
@@ -179,22 +178,6 @@ Speed controls how aggressively Trimanga creates workers:
 - `fastest`: one worker per page
 
 `fastest` is intentionally extreme. On a 1,156-page archive, it can create 1,156 workers. It may finish quickly on some machines, but it can also cause heat, memory pressure, or sluggish terminal behavior.
-
-## Package Builds
-
-CPack is configured for release archives and native Linux packages:
-
-```sh
-cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
-cmake --build build --config Release
-cmake --build build --target package
-```
-
-Expected package formats:
-
-- macOS: `.tar.gz`
-- Linux: `.tar.gz`, `.deb`, `.rpm`
-- Windows: `.zip`
 
 ## Safety Model
 

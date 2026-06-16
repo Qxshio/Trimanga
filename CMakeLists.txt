@@ -57,26 +57,6 @@ else()
   endif()
 endif()
 
-install(TARGETS trimanga RUNTIME DESTINATION bin)
-
 enable_testing()
 add_test(NAME trimanga_version COMMAND $<TARGET_FILE:trimanga> --version)
 add_test(NAME trimanga_help COMMAND $<TARGET_FILE:trimanga> --help)
-
-set(CPACK_PACKAGE_NAME "trimanga")
-set(CPACK_PACKAGE_VENDOR "Trimanga")
-set(CPACK_PACKAGE_CONTACT "Qxshio")
-set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "${PROJECT_DESCRIPTION}")
-set(CPACK_PACKAGE_HOMEPAGE_URL "https://github.com/Qxshio/Trimanga")
-set(CPACK_PACKAGE_VERSION "${PROJECT_VERSION}")
-set(CPACK_RESOURCE_FILE_README "${CMAKE_CURRENT_SOURCE_DIR}/README.md")
-
-if(WIN32)
-  set(CPACK_GENERATOR "ZIP")
-elseif(APPLE)
-  set(CPACK_GENERATOR "TGZ")
-else()
-  set(CPACK_GENERATOR "TGZ;DEB;RPM")
-endif()
-
-include(CPack)
