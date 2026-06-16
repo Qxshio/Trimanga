@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <chrono>
 #include <filesystem>
 #include <optional>
 #include <string>
@@ -82,6 +83,7 @@ struct ScanOptions {
   std::optional<std::filesystem::path> review_dir;
   bool keep_temp = false;
   bool details = false;
+  bool timings = false;
 };
 
 struct ScanResult {
@@ -90,6 +92,14 @@ struct ScanResult {
   std::string detector_version;
   std::size_t scanned_pages = 0;
   bool details = false;
+  bool timings = false;
+  bool copied_review_pages = false;
+  std::chrono::duration<double> prepare_time{};
+  std::chrono::duration<double> profile_time{};
+  std::chrono::duration<double> ocr_time{};
+  std::chrono::duration<double> visual_match_time{};
+  std::chrono::duration<double> review_copy_time{};
+  std::chrono::duration<double> total_time{};
   std::vector<Candidate> candidates;
 };
 

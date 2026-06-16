@@ -11,3 +11,5 @@
 - Added JSON output.
 - Added CMake, Makefile, smoke tests, CI, and package manager templates.
 - Kept normal scan output compact by default, with `--details` for OCR excerpts.
+- Parallelized page profiling so `--workers` applies to image analysis as well as OCR.
+- Added `--timings` for scan phase benchmarks.

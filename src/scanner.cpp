@@ -7,11 +7,14 @@
 
 #include <algorithm>
 #include <atomic>
+#include <chrono>
 #include <filesystem>
 #include <fstream>
 #include <iomanip>
 #include <iostream>
+#include <cmath>
 #include <mutex>
+#include <numeric>
 #include <sstream>
 #include <stdexcept>
 #include <string>
@@ -279,6 +282,114 @@ std::string bar(double fraction, int width = 18) {
   return value;
 }
 
+std::string seconds(std::chrono::duration<double> duration) {
+  std::ostringstream out;
+  out << std::fixed << std::setprecision(2) << duration.count() << "s";
+  return out.str();
+}
+
+FeatureStats stats_for_values(std::vector<double> values) {
+  FeatureStats stats;
+  if (values.empty()) {
+    return stats;
+  }
+  std::sort(values.begin(), values.end());
+  const std::size_t mid = values.size() / 2;
+  if (values.size() % 2 == 1) {
+    stats.median = values[mid];
+  } else {
+    stats.median = (values[mid - 1] + values[mid]) / 2.0;
+  }
+  const double sum = std::accumulate(values.begin(), values.end(), 0.0);
+  stats.mean = sum / static_cast<double>(values.size());
+  double variance = 0.0;
+  for (double value : values) {
+    const double diff = value - stats.mean;
+    variance += diff * diff;
+  }
+  stats.stdev = std::sqrt(variance / static_cast<double>(values.size()));
+  if (stats.stdev <= 0.0) {
+    stats.stdev = 1e-9;
+  }
+  return stats;
+}
+
+template <typename Func>
+void parallel_pages(std::vector<PageRef>& pages, int workers, Func&& func) {
+  std::atomic_size_t next{0};
+  const int actual_workers = std::min<int>(std::max(1, workers), static_cast<int>(pages.size()));
+  std::vector<std::thread> threads;
+  threads.reserve(static_cast<std::size_t>(actual_workers));
+  for (int worker = 0; worker < actual_workers; ++worker) {
+    threads.emplace_back([&] {
+      while (true) {
+        const std::size_t index = next.fetch_add(1);
+        if (index >= pages.size()) {
+          return;
+        }
+        func(pages[index], index);
+      }
+    });
+  }
+  for (std::thread& thread : threads) {
+    thread.join();
+  }
+}
+
+VolumeProfile build_volume_profile_parallel(std::vector<PageRef>& pages, int workers) {
+  if (pages.empty()) {
+    return {};
+  }
+  parallel_pages(pages, workers, [](PageRef& page, std::size_t) {
+    page.features = extract_page_features(page.image_path);
+  });
+
+  std::vector<double> aspect;
+  std::vector<double> edge;
+  std::vector<double> entropy;
+  std::vector<double> ink;
+  std::vector<double> dark;
+  std::vector<double> white;
+  std::vector<double> art;
+  std::vector<double> panels;
+  aspect.reserve(pages.size());
+  edge.reserve(pages.size());
+  entropy.reserve(pages.size());
+  ink.reserve(pages.size());
+  dark.reserve(pages.size());
+  white.reserve(pages.size());
+  art.reserve(pages.size());
+  panels.reserve(pages.size());
+
+  for (const PageRef& page : pages) {
+    if (!page.features.valid) {
+      continue;
+    }
+    aspect.push_back(page.features.aspect_ratio);
+    edge.push_back(page.features.edge_density);
+    entropy.push_back(page.features.entropy);
+    ink.push_back(page.features.ink_coverage);
+    dark.push_back(page.features.dark_coverage);
+    white.push_back(page.features.white_coverage);
+    art.push_back(page.features.artwork_coverage);
+    panels.push_back(page.features.panel_count);
+  }
+
+  VolumeProfile profile;
+  profile.aspect_ratio = stats_for_values(std::move(aspect));
+  profile.edge_density = stats_for_values(std::move(edge));
+  profile.entropy = stats_for_values(std::move(entropy));
+  profile.ink_coverage = stats_for_values(std::move(ink));
+  profile.dark_coverage = stats_for_values(std::move(dark));
+  profile.white_coverage = stats_for_values(std::move(white));
+  profile.artwork_coverage = stats_for_values(std::move(art));
+  profile.panel_count = stats_for_values(std::move(panels));
+  profile.valid = pages.end() != std::find_if(pages.begin(), pages.end(), [](const PageRef& page) {
+                    return page.features.valid;
+                  });
+  return profile;
+}
+
 void status_line(const ScanOptions& options, const std::string& message) {
   if (options.format == OutputFormat::Table) {
     std::cout << message << "\n";
@@ -298,6 +409,7 @@ void progress_line(const ScanOptions& options, TerminalOutput& terminal, std::si
 }  // namespace
 
 ScanResult scan(const fs::path& input, const ScanOptions& options) {
+  const auto started_at = std::chrono::steady_clock::now();
   if (options.workers < 1) {
     throw std::runtime_error("workers must be at least 1");
   }
@@ -309,6 +421,7 @@ ScanResult scan(const fs::path& input, const ScanOptions& options) {
 
   TempDirectory temp;
   std::vector<PageRef> pages = build_page_refs(input, temp);
+  const auto prepared_at = std::chrono::steady_clock::now();
   if (options.keep_temp) {
     temp.keep();
   }
@@ -318,11 +431,17 @@ ScanResult scan(const fs::path& input, const ScanOptions& options) {
     empty.detector_version = kDetectorVersion;
     empty.ocr_backend = "none";
     empty.details = options.details;
+    empty.timings = options.timings;
+    empty.prepare_time = prepared_at - started_at;
+    empty.total_time = prepared_at - started_at;
     return empty;
   }
 
-  status_line(options, "Found " + std::to_string(pages.size()) + " pages. Building page profile...");
-  VolumeProfile profile = build_volume_profile(pages);
+  const int workers = std::min<int>(options.workers, static_cast<int>(pages.size()));
+  status_line(options, "Found " + std::to_string(pages.size()) + " pages. Building page profile with " +
+                           std::to_string(workers) + " workers...");
+  VolumeProfile profile = build_volume_profile_parallel(pages, workers);
+  const auto profiled_at = std::chrono::steady_clock::now();
   auto backend = make_ocr_backend(options.ocr);
 
   ScanResult result;
@@ -331,12 +450,14 @@ ScanResult scan(const fs::path& input, const ScanOptions& options) {
   result.ocr_backend = backend->name();
   result.scanned_pages = pages.size();
   result.details = options.details;
+  result.timings = options.timings;
+  result.prepare_time = prepared_at - started_at;
+  result.profile_time = profiled_at - prepared_at;
 
   std::atomic_size_t next{0};
   std::atomic_size_t done{0};
   std::mutex candidates_mutex;
   std::mutex progress_mutex;
-  const int workers = std::min<int>(options.workers, static_cast<int>(pages.size()));
   std::vector<std::thread> threads;
   threads.reserve(static_cast<std::size_t>(workers));
 
@@ -378,15 +499,23 @@ ScanResult scan(const fs::path& input, const ScanOptions& options) {
     progress_line(options, terminal, pages.size(), pages.size());
     terminal.write("\n");
   }
+  const auto ocr_finished_at = std::chrono::steady_clock::now();
+  result.ocr_time = ocr_finished_at - profiled_at;
 
   add_visual_matches(result.candidates, pages);
+  const auto visual_matched_at = std::chrono::steady_clock::now();
+  result.visual_match_time = visual_matched_at - ocr_finished_at;
   std::sort(result.candidates.begin(), result.candidates.end(), [](const Candidate& left, const Candidate& right) {
     return left.page.order < right.page.order;
   });
 
   if (options.review_dir.has_value()) {
     write_review_folder(result.candidates, *options.review_dir);
+    result.copied_review_pages = true;
   }
+  const auto finished_at = std::chrono::steady_clock::now();
+  result.review_copy_time = finished_at - visual_matched_at;
+  result.total_time = finished_at - started_at;
   return result;
 }
 
@@ -396,6 +525,18 @@ void print_result_table(const ScanResult& result) {
   std::cout << "OCR: " << result.ocr_backend << "\n";
   std::cout << "Pages scanned: " << result.scanned_pages << "\n";
   std::cout << "Pages recommended for review: " << result.candidates.size() << "\n\n";
+
+  if (result.timings) {
+    std::cout << "Timings\n";
+    std::cout << "  Prepare:       " << seconds(result.prepare_time) << "\n";
+    std::cout << "  Page profile:  " << seconds(result.profile_time) << "\n";
+    std::cout << "  OCR/classify:  " << seconds(result.ocr_time) << "\n";
+    std::cout << "  Visual match:  " << seconds(result.visual_match_time) << "\n";
+    if (result.copied_review_pages) {
+      std::cout << "  Review copy:   " << seconds(result.review_copy_time) << "\n";
+    }
+    std::cout << "  Total:         " << seconds(result.total_time) << "\n\n";
+  }
 
   if (result.candidates.empty()) {
     std::cout << "No review candidates found.\n";

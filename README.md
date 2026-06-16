@@ -167,10 +167,12 @@ Options:
 --format table|json          Output format. Default: table
 --review-dir PATH            Copy suspicious pages into this folder
 --details                    Include OCR excerpts in table output
+--timings                    Print phase timings after the scan
 --keep-temp                  Keep extracted archive temp files
 ```
 
 The default table output is intentionally compact. Use `--details` when you want to inspect the OCR text that caused each page to be flagged.
+Use `--timings` to see where time is spent across extraction, page profiling, OCR, visual matching, and review export.
 
 ## Package Builds
 
