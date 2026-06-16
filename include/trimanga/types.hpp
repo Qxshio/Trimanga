@@ -65,27 +65,12 @@ struct Candidate {
   int visual_distance = 0;
 };
 
-enum class OcrPreference {
-  Auto,
-  AppleVision,
-  Trimanga,
-  Tesseract,
-  None,
-};
-
 enum class OutputFormat {
   Table,
   Json,
 };
 
-enum class OcrSpeed {
-  Accurate,
-  Fast,
-};
-
 struct ScanOptions {
-  OcrPreference ocr = OcrPreference::Auto;
-  OcrSpeed ocr_speed = OcrSpeed::Accurate;
   int workers = 4;
   OutputFormat format = OutputFormat::Table;
   std::optional<std::filesystem::path> review_dir;
@@ -96,7 +81,7 @@ struct ScanOptions {
 
 struct ScanResult {
   std::filesystem::path input;
-  std::string ocr_backend;
+  std::string detector;
   std::string detector_version;
   std::size_t scanned_pages = 0;
   bool details = false;
@@ -104,7 +89,7 @@ struct ScanResult {
   bool copied_review_pages = false;
   std::chrono::duration<double> prepare_time{};
   std::chrono::duration<double> profile_time{};
-  std::chrono::duration<double> ocr_time{};
+  std::chrono::duration<double> analysis_time{};
   std::chrono::duration<double> visual_match_time{};
   std::chrono::duration<double> review_copy_time{};
   std::chrono::duration<double> total_time{};
@@ -113,6 +98,6 @@ struct ScanResult {
 
 inline constexpr const char* kDetectorVersion = "2026-06-16-cpp-v1";
 inline constexpr int kVisualHashSize = 16;
-inline constexpr int kVisualMatchDistance = 6;
+inline constexpr int kVisualMatchDistance = 2;
 
 }  // namespace trimanga

@@ -19,6 +19,5 @@
         "url": "https://github.com/Qxshio/Trimanga/releases/download/v$version/trimanga-windows-x64.zip"
       }
     }
-  },
-  "notes": "Install Tesseract OCR separately and make sure tesseract.exe is on PATH."
+  }
 }

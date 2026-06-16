@@ -2,20 +2,18 @@ CXX ?= clang++
 BUILD_DIR ?= build
 TARGET := $(BUILD_DIR)/trimanga
 
-CXXFLAGS ?= -std=c++20 -Wall -Wextra -Wpedantic -Iinclude -DTRIMANGA_APPLE=1
-LDFLAGS ?= -framework Foundation -framework Vision -framework CoreImage -framework CoreGraphics -framework ImageIO
+CXXFLAGS ?= -std=c++20 -Wall -Wextra -Wpedantic -Iinclude -Ithird_party/stb
+LDFLAGS ?=
 
 SOURCES := \
 	src/main.cpp \
 	src/classifier.cpp \
 	src/file_utils.cpp \
-	src/ocr.cpp \
+	src/image/image_loader.cpp \
+	src/image/page_features.cpp \
 	src/process.cpp \
 	src/scanner.cpp \
-	src/tesseract_backend.cpp \
-	src/apple_vision_backend.mm \
-	src/image_features_macos.mm \
-	src/trimanga_ocr_backend.mm
+	src/detectors/scanlation_detector.cpp
 
 OBJECTS := $(patsubst src/%,$(BUILD_DIR)/%.o,$(SOURCES))
 

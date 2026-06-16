@@ -10,44 +10,20 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
-if(APPLE)
-  enable_language(OBJCXX)
-endif()
-
 option(TRIMANGA_WARNINGS_AS_ERRORS "Treat compiler warnings as errors" OFF)
 
 add_executable(trimanga
   src/main.cpp
   src/classifier.cpp
   src/file_utils.cpp
-  src/ocr.cpp
+  src/image/image_loader.cpp
+  src/image/page_features.cpp
   src/process.cpp
   src/scanner.cpp
-  src/tesseract_backend.cpp
+  src/detectors/scanlation_detector.cpp
 )
 
-target_include_directories(trimanga PRIVATE include)
-
-if(APPLE)
-  target_sources(trimanga PRIVATE
-    src/apple_vision_backend.mm
-    src/image_features_macos.mm
-    src/trimanga_ocr_backend.mm
-  )
-  target_compile_definitions(trimanga PRIVATE TRIMANGA_APPLE=1)
-  target_link_libraries(trimanga PRIVATE
-    "-framework Foundation"
-    "-framework Vision"
-    "-framework CoreImage"
-    "-framework CoreGraphics"
-    "-framework ImageIO"
-  )
-else()
-  target_sources(trimanga PRIVATE
-    src/image_features_stub.cpp
-    src/trimanga_ocr_backend_stub.cpp
-  )
-endif()
+target_include_directories(trimanga PRIVATE include third_party/stb)
 
 if(MSVC)
   target_compile_options(trimanga PRIVATE /W4)
@@ -81,8 +57,8 @@ elseif(APPLE)
   set(CPACK_GENERATOR "TGZ")
 else()
   set(CPACK_GENERATOR "TGZ;DEB;RPM")
-  set(CPACK_DEBIAN_PACKAGE_DEPENDS "tesseract-ocr, unzip")
-  set(CPACK_RPM_PACKAGE_REQUIRES "tesseract, unzip")
+  set(CPACK_DEBIAN_PACKAGE_DEPENDS "unzip")
+  set(CPACK_RPM_PACKAGE_REQUIRES "unzip")
 endif()
 
 include(CPack)

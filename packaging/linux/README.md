@@ -3,7 +3,7 @@
 Linux packages are generated with CPack from the top-level CMake project.
 
 ```sh
-sudo apt-get install -y cmake g++ tesseract-ocr unzip
+sudo apt-get install -y cmake g++ unzip
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build
 cmake --build build --target package
@@ -15,5 +15,4 @@ Expected package outputs on Linux:
 - `.deb`
 - `.rpm`
 
-The generated `.deb` declares `tesseract-ocr` and `unzip` as runtime dependencies.
-The generated `.rpm` declares `tesseract` and `unzip`.
+The generated `.deb` and `.rpm` packages declare `unzip` as the only runtime extraction dependency.

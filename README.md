@@ -20,7 +20,7 @@ Trimanga is intentionally conservative. False positives are more harmful than mi
 
 ## What It Detects
 
-Trimanga combines OCR, page-layout statistics, volume-wide outlier scoring and visual similarity matching to flag likely removable pages, including:
+Trimanga combines a built-in page detector, layout statistics, volume-wide outlier scoring and visual similarity matching to flag likely removable pages, including:
 
 - Scanlation credit pages
 - Recruitment pages
@@ -47,9 +47,8 @@ Supported image types:
 
 ## Features
 
-- Native Apple Vision OCR on macOS.
-- Tesseract OCR fallback on macOS, Linux and Windows.
-- Parallel OCR workers for faster scans.
+- Built-in cross-platform detector with no external recognition runtime.
+- Parallel page analysis for faster scans.
 - Conservative classifier tuned for review-first workflows.
 - JSON output for automation.
 
@@ -59,54 +58,37 @@ Supported image types:
 
 - Apple Clang or Xcode Command Line Tools
 - CMake 3.22+ recommended
-- Tesseract optional, used as fallback
 - `unzip` or `7z` for archive extraction
-
-Apple Vision is built into macOS and is preferred by default.
 
 ```sh
 xcode-select --install
-brew install cmake tesseract unzip
+brew install cmake unzip
 ```
 
 ### Linux
 
 - CMake 3.22+
 - C++20 compiler such as GCC 11+ or Clang 14+
-- Tesseract OCR
 - `unzip` or `7z`
 
 Debian/Ubuntu:
 
 ```sh
 sudo apt-get update
-sudo apt-get install -y cmake g++ tesseract-ocr unzip
+sudo apt-get install -y cmake g++ unzip
 ```
 
 Fedora:
 
 ```sh
-sudo dnf install cmake gcc-c++ tesseract unzip
+sudo dnf install cmake gcc-c++ unzip
 ```
 
 ### Windows
 
 - Visual Studio 2022 Build Tools or another C++20 compiler
 - CMake 3.22+
-- Tesseract OCR installed and available on `PATH`
 - PowerShell, included with Windows, for archive extraction
-
-Recommended Tesseract install:
-
-```powershell
-winget install UB-Mannheim.TesseractOCR
-```
-
-or:
-
-```powershell
-choco install tesseract
-```
 
 ## Build
 
@@ -131,7 +113,7 @@ build/Release/trimanga.exe
 
 ### macOS Makefile
 
-If CMake is not installed on macOS, the checked-in Makefile can build the native Apple Vision version:
+If CMake is not installed on macOS, the checked-in Makefile can build Trimanga:
 
 ```sh
 make
@@ -162,43 +144,16 @@ trimanga scan "./Volume 01.cbz" --format json
 Options:
 
 ```text
---ocr auto|apple|trimanga|tesseract|none
-                              OCR backend to use. Default: auto
---ocr-speed accurate|fast     OCR recognition mode. Default: accurate
---workers N                  Number of OCR workers. Default: 4
+--workers N                  Number of analysis workers. Default: 4
 --format table|json          Output format. Default: table
 --review-dir PATH            Copy suspicious pages into this folder
---details                    Include OCR excerpts in table output
+--details                    Include detector signals in table output
 --timings                    Print phase timings after the scan
 --keep-temp                  Keep extracted archive temp files
 ```
 
-The default table output is intentionally compact. Use `--details` when you want to inspect the OCR text that caused each page to be flagged.
-Use `--timings` to see where time is spent across extraction, page profiling, OCR, visual matching, and review export.
-
-For faster scans, use:
-
-```sh
-trimanga scan "./Volume 01.cbz" --workers 8 --ocr-speed fast --timings
-```
-
-Fast OCR is useful for large libraries and review-first workflows. Accurate OCR remains the default because compact credit pages can contain small text.
-
-For dependency-free visual analysis only:
-
-```sh
-trimanga scan "./Volume 01.cbz" --ocr none --timings
-```
-
-`--ocr none` avoids OCR entirely. It is very lightweight, but it cannot read credit/recruitment text, so it should be treated as a quick visual pass rather than a full scan.
-
-For Trimanga's experimental built-in detector:
-
-```sh
-trimanga scan "./Volume 01.cbz" --ocr trimanga --timings
-```
-
-`--ocr trimanga` is dependency-free and fast. It does not perform general-purpose OCR; it analyzes page layout for credit-card and notice-page patterns, then emits internal cleanup signals. Use it as a native fallback when Apple Vision is unavailable and Tesseract is too heavy.
+The default table output is intentionally compact. Use `--details` when you want to inspect the detector signals that caused each page to be flagged.
+Use `--timings` to see where time is spent across extraction, page profiling, page analysis, visual matching and review export.
 
 ## Package Builds
 
@@ -228,11 +183,7 @@ The classifier is tuned around three principles:
 
 ## Platform Notes
 
-macOS has the strongest native support because Trimanga uses Apple Vision for OCR and ImageIO/CoreGraphics for image statistics.
-
-Linux and Windows are supported through the portable Tesseract CLI backend. Their current image-feature extractor is intentionally minimal, so OCR indicators carry more of the decision-making until a cross-platform image backend is added.
-
-Apple Vision may print private TextRecognition model warnings on some macOS installs. Trimanga treats the backend as available if Vision returns OCR text; those warnings are not fatal.
+Trimanga uses the same built-in detector on macOS, Linux and Windows. It does not require external recognition engines or bundled models.
 
 ## Development
 

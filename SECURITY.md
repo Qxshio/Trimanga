@@ -15,7 +15,7 @@ Please include:
 - A short description of the issue.
 - Steps to reproduce.
 - Platform and version information.
-- Whether the issue involves archive extraction, OCR execution, path traversal, or unsafe deletion.
+- Whether the issue involves archive extraction, image decoding, path traversal, or unsafe deletion.
 
 ## Safety Expectations
 

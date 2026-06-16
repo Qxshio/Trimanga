@@ -12,6 +12,6 @@
     <requireLicenseAcceptance>false</requireLicenseAcceptance>
     <description>Clean manga archives by detecting removable scanlation and ad pages.</description>
     <summary>Flags scanlation credits, recruitment pages, support ads, and repeated release clutter for manual review.</summary>
-    <tags>manga cbz ocr scanlation cli</tags>
+    <tags>manga cbz scanlation cleanup cli</tags>
   </metadata>
 </package>

@@ -6,7 +6,6 @@ class Trimanga < Formula
   license "MIT"
 
   depends_on "cmake" => :build
-  depends_on "tesseract"
   depends_on "unzip"
 
   def install

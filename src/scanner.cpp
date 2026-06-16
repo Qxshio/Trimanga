@@ -3,7 +3,7 @@
 #include "trimanga/classifier.hpp"
 #include "trimanga/file_utils.hpp"
 #include "trimanga/image_features.hpp"
-#include "trimanga/ocr.hpp"
+#include "trimanga/detector.hpp"
 
 #include <algorithm>
 #include <atomic>
@@ -431,7 +431,7 @@ ScanResult scan(const fs::path& input, const ScanOptions& options) {
     ScanResult empty;
     empty.input = input;
     empty.detector_version = kDetectorVersion;
-    empty.ocr_backend = "none";
+    empty.detector = "Trimanga detector";
     empty.details = options.details;
     empty.timings = options.timings;
     empty.prepare_time = prepared_at - started_at;
@@ -440,32 +440,27 @@ ScanResult scan(const fs::path& input, const ScanOptions& options) {
   }
 
   const int workers = std::min<int>(options.workers, static_cast<int>(pages.size()));
-  auto backend = make_ocr_backend(options.ocr, options.ocr_speed);
+  auto detector = make_page_detector();
 
   ScanResult result;
   result.input = input;
   result.detector_version = kDetectorVersion;
-  result.ocr_backend = backend->name();
+  result.detector = detector->name();
   result.scanned_pages = pages.size();
   result.details = options.details;
   result.timings = options.timings;
   result.prepare_time = prepared_at - started_at;
 
   std::vector<std::string> page_texts(pages.size());
-  std::atomic_size_t next_ocr{0};
-  std::atomic_size_t done_ocr{0};
+  std::atomic_size_t next_analysis{0};
+  std::atomic_size_t done_analysis{0};
   std::mutex progress_mutex;
   std::vector<std::thread> threads;
   threads.reserve(static_cast<std::size_t>(workers));
 
   status_line(options, "Found " + std::to_string(pages.size()) + " pages. Analyzing with " + std::to_string(workers) +
                            " workers...");
-  if (options.ocr == OcrPreference::None) {
-    status_line(options, "Using visual-only mode with no OCR backend.");
-  } else {
-    status_line(options, "Using " + result.ocr_backend +
-                             (options.ocr_speed == OcrSpeed::Fast ? " in fast mode." : " in accurate mode."));
-  }
+  status_line(options, "Using Trimanga's built-in scanlation and ad detector.");
   TerminalOutput terminal(options.format == OutputFormat::Table);
   ScopedSystemOutputSilencer silence_system_warnings(options.format == OutputFormat::Table && !options.details);
 
@@ -476,17 +471,17 @@ ScanResult scan(const fs::path& input, const ScanOptions& options) {
     profile_finished_at = std::chrono::steady_clock::now();
   });
 
-  const auto ocr_started_at = std::chrono::steady_clock::now();
+  const auto analysis_started_at = std::chrono::steady_clock::now();
   for (int worker = 0; worker < workers; ++worker) {
     threads.emplace_back([&] {
       while (true) {
-        const std::size_t index = next_ocr.fetch_add(1);
+        const std::size_t index = next_analysis.fetch_add(1);
         if (index >= pages.size()) {
           return;
         }
         const PageRef& page = pages[index];
-        page_texts[index] = backend->read_text(page.image_path);
-        const std::size_t finished = done_ocr.fetch_add(1) + 1;
+        page_texts[index] = detector->analyze_page(page.image_path);
+        const std::size_t finished = done_analysis.fetch_add(1) + 1;
         if (options.format == OutputFormat::Table) {
           std::lock_guard<std::mutex> lock(progress_mutex);
           progress_line(options, terminal, finished, pages.size());
@@ -534,7 +529,7 @@ ScanResult scan(const fs::path& input, const ScanOptions& options) {
   }
   const auto classified_at = std::chrono::steady_clock::now();
   result.profile_time = profile_finished_at - profile_started_at;
-  result.ocr_time = classified_at - ocr_started_at;
+  result.analysis_time = classified_at - analysis_started_at;
 
   add_visual_matches(result.candidates, pages);
   const auto visual_matched_at = std::chrono::steady_clock::now();
@@ -556,7 +551,7 @@ ScanResult scan(const fs::path& input, const ScanOptions& options) {
 void print_result_table(const ScanResult& result) {
   std::cout << "Trimanga " << result.detector_version << "\n";
   std::cout << "Input: " << result.input << "\n";
-  std::cout << "OCR: " << result.ocr_backend << "\n";
+  std::cout << "Detector: " << result.detector << "\n";
   std::cout << "Pages scanned: " << result.scanned_pages << "\n";
   std::cout << "Pages recommended for review: " << result.candidates.size() << "\n\n";
 
@@ -564,13 +559,13 @@ void print_result_table(const ScanResult& result) {
     std::cout << "Timings\n";
     std::cout << "  Prepare:       " << seconds(result.prepare_time) << "\n";
     std::cout << "  Page profile:  " << seconds(result.profile_time) << "\n";
-    std::cout << "  OCR/classify:  " << seconds(result.ocr_time) << "\n";
+    std::cout << "  Analyze:       " << seconds(result.analysis_time) << "\n";
     std::cout << "  Visual match:  " << seconds(result.visual_match_time) << "\n";
     if (result.copied_review_pages) {
       std::cout << "  Review copy:   " << seconds(result.review_copy_time) << "\n";
     }
     std::cout << "  Total:         " << seconds(result.total_time) << "\n\n";
-    std::cout << "Profile and OCR work can overlap, so phase times may not add up to total time.\n\n";
+    std::cout << "Profile and page analysis can overlap, so phase times may not add up to total time.\n\n";
   }
 
   if (result.candidates.empty()) {
@@ -582,7 +577,7 @@ void print_result_table(const ScanResult& result) {
             << "File\n";
   std::cout << std::string(72, '-') << "\n";
   for (const Candidate& candidate : result.candidates) {
-    std::string reason = candidate.visual_match ? "visual" : "ocr";
+    std::string reason = candidate.visual_match ? "repeat" : "signal";
     std::cout << std::left << std::setw(8) << candidate.page.order << std::setw(10) << std::fixed
               << std::setprecision(1) << candidate.classification.score << std::setw(10) << reason
               << candidate.page.archive_name << "\n";
@@ -591,14 +586,14 @@ void print_result_table(const ScanResult& result) {
     }
   }
   if (!result.details) {
-    std::cout << "\nRun again with --details to include OCR excerpts for each review candidate.\n";
+    std::cout << "\nRun again with --details to include detector signals for each review candidate.\n";
   }
 }
 
 void print_result_json(const ScanResult& result) {
   std::cout << "{\n";
   std::cout << "  \"input\": \"" << escape_json(result.input.string()) << "\",\n";
-  std::cout << "  \"ocr_backend\": \"" << escape_json(result.ocr_backend) << "\",\n";
+  std::cout << "  \"detector\": \"" << escape_json(result.detector) << "\",\n";
   std::cout << "  \"detector_version\": \"" << escape_json(result.detector_version) << "\",\n";
   std::cout << "  \"scanned_pages\": " << result.scanned_pages << ",\n";
   std::cout << "  \"candidates\": [\n";
