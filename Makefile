@@ -13,7 +13,13 @@ PREVIEW_SOURCE := src/preview/previewer_stub.cpp
 PREVIEW_CXXFLAGS :=
 PREVIEW_LDFLAGS :=
 else
-PREVIEW_SOURCE := src/preview/sdl_previewer.cpp
+PREVIEW_SOURCE := \
+	src/preview/sdl_previewer.cpp \
+	src/preview/sdl/drawing.cpp \
+	src/preview/sdl/layout.cpp \
+	src/preview/sdl/page_card.cpp \
+	src/preview/sdl/texture_cache.cpp \
+	src/preview/sdl/widgets.cpp
 PREVIEW_CXXFLAGS := $(SDL_CFLAGS) -DTRIMANGA_WITH_SDL=1
 PREVIEW_LDFLAGS := $(SDL_LIBS)
 endif

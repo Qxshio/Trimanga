@@ -17,7 +17,14 @@ set(TRIMANGA_PREVIEW_SOURCE src/preview/previewer_stub.cpp)
 if(TRIMANGA_WITH_SDL)
   find_package(SDL2 QUIET)
   if(SDL2_FOUND)
-    set(TRIMANGA_PREVIEW_SOURCE src/preview/sdl_previewer.cpp)
+    set(TRIMANGA_PREVIEW_SOURCE
+      src/preview/sdl_previewer.cpp
+      src/preview/sdl/drawing.cpp
+      src/preview/sdl/layout.cpp
+      src/preview/sdl/page_card.cpp
+      src/preview/sdl/texture_cache.cpp
+      src/preview/sdl/widgets.cpp
+    )
   endif()
 endif()
 
