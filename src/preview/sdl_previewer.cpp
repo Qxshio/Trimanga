@@ -43,8 +43,7 @@ struct Layout {
 enum class ButtonId {
   None,
   Delete,
-  MarkAll,
-  Clear,
+  ToggleAll,
 };
 
 constexpr SDL_Color kCanvas{255, 247, 250, 255};
@@ -139,6 +138,13 @@ void draw_x(SDL_Renderer* renderer, int cx, int cy, SDL_Color color) {
   thick_line(renderer, cx + 12, cy - 12, cx - 12, cy + 12, color, 4);
 }
 
+void draw_arrow_pair(SDL_Renderer* renderer, int cx, int cy, SDL_Color color) {
+  thick_line(renderer, cx - 12, cy, cx - 3, cy - 8, color, 2);
+  thick_line(renderer, cx - 12, cy, cx - 3, cy + 8, color, 2);
+  thick_line(renderer, cx + 12, cy, cx + 3, cy - 8, color, 2);
+  thick_line(renderer, cx + 12, cy, cx + 3, cy + 8, color, 2);
+}
+
 std::array<std::uint8_t, 7> glyph(char ch) {
   switch (ch) {
     case 'A': return {0x0E, 0x11, 0x11, 0x1F, 0x11, 0x11, 0x11};
@@ -218,6 +224,14 @@ void draw_text(SDL_Renderer* renderer, int x, int y, const std::string& text, SD
 void draw_centered_text(SDL_Renderer* renderer, const Rect& rect, const std::string& text, SDL_Color color, int scale) {
   draw_text(renderer, rect.x + (rect.w - text_width(text, scale)) / 2, rect.y + (rect.h - 7 * scale) / 2, text, color,
             scale);
+}
+
+void draw_keycap(SDL_Renderer* renderer, int x, int y, const std::string& label, SDL_Color color) {
+  const int width = std::max(28, text_width(label, 2) + 12);
+  const Rect cap{x, y, width, 24};
+  fill(renderer, cap, SDL_Color{255, 239, 246, 255});
+  outline(renderer, cap, color);
+  draw_centered_text(renderer, cap, label, color, 2);
 }
 
 std::string action_name(ReviewAction action) {
@@ -325,7 +339,7 @@ void update_title(SDL_Window* window, const Candidate& candidate, std::size_t in
   std::ostringstream title;
   title << "Trimanga Review - " << (index + 1) << "/" << total << " - " << candidate.page.archive_name
         << " - " << action_name(candidate.review_action)
-        << "   Wheel/Arrows/HJKL=Carousel  X/D=Toggle Delete  A=Mark All  C=Clear  Esc=Confirm";
+        << "   Wheel/Arrows/HJKL=Carousel  X/D=Toggle Delete  T=Toggle All  Esc=Confirm";
   SDL_SetWindowTitle(window, title.str().c_str());
 }
 
@@ -446,20 +460,21 @@ void render_header(SDL_Renderer* renderer, const Rect& header, std::size_t index
   const bool deleted = action == ReviewAction::Delete;
   const std::string status = deleted ? "MARKED DELETE" : "KEEP";
   const int status_width = text_width(status, 2) + 34;
-  const Rect status_badge{header.x + header.w - status_width - 136, header.y + 20, status_width, 34};
+  const std::string count = std::to_string(index + 1) + "/" + std::to_string(total);
+  const int count_width = text_width(count, 2) + 34;
+  const Rect count_badge{header.x + header.w - count_width - 22, header.y + 18, count_width, 42};
+  const Rect status_badge{count_badge.x - status_width - 18, header.y + 20, status_width, 34};
   fill(renderer, status_badge, deleted ? kDelete : kAccent);
   draw_centered_text(renderer, status_badge, status, kLightText, 2);
 
-  const std::string count = std::to_string(index + 1) + "/" + std::to_string(total);
-  const Rect count_badge{header.x + header.w - 114, header.y + 18, 94, 38};
   fill(renderer, count_badge, SDL_Color{255, 252, 246, 255});
   outline(renderer, count_badge, kAccent);
-  draw_centered_text(renderer, count_badge, count, kText, 3);
+  draw_centered_text(renderer, count_badge, count, kText, 2);
 }
 
 void render_action_area(SDL_Renderer* renderer, const Rect& action, const Rect& delete_button,
-                        const Rect& mark_all_button, const Rect& clear_button, ReviewAction current_action,
-                        ButtonId hovered, ButtonId pressed, double alpha) {
+                        const Rect& toggle_all_button, ReviewAction current_action, ButtonId hovered,
+                        ButtonId pressed, double alpha) {
   fill(renderer, action, mix(kCanvas, kPaper, alpha));
   outline(renderer, action, SDL_Color{219, 166, 190, static_cast<Uint8>(255 * alpha)});
   const bool marked_delete = current_action == ReviewAction::Delete;
@@ -471,25 +486,38 @@ void render_action_area(SDL_Renderer* renderer, const Rect& action, const Rect& 
 
   render_button(renderer, delete_button, kDeleteSoft, kDelete, marked_delete ? "UNDO" : "DELETE", marked_delete,
                 hovered == ButtonId::Delete, pressed == ButtonId::Delete);
-  render_button(renderer, mark_all_button, kAccentSoft, kAccent, "ALL DELETE", false, hovered == ButtonId::MarkAll,
-                pressed == ButtonId::MarkAll);
-  render_button(renderer, clear_button, SDL_Color{255, 239, 216, 255}, kWarm, "CLEAR", false,
-                hovered == ButtonId::Clear, pressed == ButtonId::Clear);
+  render_button(renderer, toggle_all_button, kAccentSoft, kAccent, "TOGGLE ALL", false,
+                hovered == ButtonId::ToggleAll, pressed == ButtonId::ToggleAll);
 
   fill_circle(renderer, delete_button.x + 28, delete_button.y + 25, 15, kDelete);
   draw_x(renderer, delete_button.x + 28, delete_button.y + 25, kCanvas);
-  fill_circle(renderer, mark_all_button.x + 28, mark_all_button.y + 25, 15, kAccent);
-  draw_x(renderer, mark_all_button.x + 28, mark_all_button.y + 25, kPaper);
-  fill_circle(renderer, clear_button.x + 28, clear_button.y + 25, 15, kWarm);
-  draw_check(renderer, clear_button.x + 28, clear_button.y + 25, kPaper);
+  fill_circle(renderer, toggle_all_button.x + 28, toggle_all_button.y + 25, 15, kAccent);
+  draw_arrow_pair(renderer, toggle_all_button.x + 28, toggle_all_button.y + 25, kPaper);
 }
 
 void render_footer(SDL_Renderer* renderer, const Rect& footer) {
   fill(renderer, footer, SDL_Color{255, 252, 246, 218});
   outline(renderer, footer, SDL_Color{229, 190, 207, 255});
-  draw_text(renderer, footer.x + 14, footer.y + 15, "ESC CONFIRM SELECTION", kMuted, 2);
-  draw_text(renderer, footer.x + footer.w - 470, footer.y + 15, "ARROWS HJKL SCROLL   SPACE X D TOGGLE   A ALL   C CLEAR",
-            kMuted, 2);
+  int x = footer.x + 14;
+  const int y = footer.y + 10;
+  draw_keycap(renderer, x, y, "ESC", kMuted);
+  x += 48;
+  draw_text(renderer, x, y + 5, "CONFIRM", kMuted, 2);
+  x += 118;
+  draw_arrow_pair(renderer, x + 12, y + 12, kMuted);
+  x += 34;
+  draw_text(renderer, x, y + 5, "SCROLL", kMuted, 2);
+
+  int right = footer.x + footer.w - 358;
+  draw_keycap(renderer, right, y, "SP", kMuted);
+  right += 42;
+  draw_keycap(renderer, right, y, "X", kDelete);
+  right += 34;
+  draw_text(renderer, right, y + 5, "TOGGLE", kMuted, 2);
+  right += 98;
+  draw_keycap(renderer, right, y, "T", kAccent);
+  right += 34;
+  draw_text(renderer, right, y + 5, "TOGGLE ALL", kMuted, 2);
 }
 
 void update_logical_render_size(SDL_Window* window, SDL_Renderer* renderer, int& window_width, int& window_height) {
@@ -552,16 +580,13 @@ bool review_candidates(std::vector<Candidate>& candidates) {
     badge_pulse = 1.0;
     update_title(window, candidates[selected_index], selected_index, candidates.size());
   };
-  auto mark_all_delete = [&] {
+  auto toggle_all = [&] {
+    const bool all_deleted = std::all_of(candidates.begin(), candidates.end(), [](const Candidate& candidate) {
+      return candidate.review_action == ReviewAction::Delete;
+    });
+    const ReviewAction next_action = all_deleted ? ReviewAction::Undecided : ReviewAction::Delete;
     for (Candidate& candidate : candidates) {
-      candidate.review_action = ReviewAction::Delete;
-    }
-    badge_pulse = 1.0;
-    update_title(window, candidates[selected_index], selected_index, candidates.size());
-  };
-  auto clear_all_marks = [&] {
-    for (Candidate& candidate : candidates) {
-      candidate.review_action = ReviewAction::Undecided;
+      candidate.review_action = next_action;
     }
     badge_pulse = 1.0;
     update_title(window, candidates[selected_index], selected_index, candidates.size());
@@ -607,11 +632,9 @@ bool review_candidates(std::vector<Candidate>& candidates) {
           case SDLK_SPACE:
             toggle_delete();
             break;
+          case SDLK_t:
           case SDLK_a:
-            mark_all_delete();
-            break;
-          case SDLK_c:
-            clear_all_marks();
+            toggle_all();
             break;
           default:
             break;
@@ -630,14 +653,13 @@ bool review_candidates(std::vector<Candidate>& candidates) {
         int window_height = 0;
         update_logical_render_size(window, renderer, window_width, window_height);
         const Layout layout = compute_layout(window_width, window_height);
-        const int button_width = std::clamp((layout.action.w - 84) / 3, 140, 190);
-        const int button_gap = 16;
-        const int group_width = button_width * 3 + button_gap * 2;
-        const int button_x = layout.action.x + layout.action.w - group_width - 18;
+        const int button_width = std::clamp((layout.action.w - 72) / 2, 160, 220);
+        const int button_gap = 18;
+        const int group_width = button_width * 2 + button_gap;
+        const int button_x = layout.action.x + (layout.action.w - group_width) / 2;
         const int button_y = layout.action.y + layout.action.h - 62;
         const Rect delete_button{button_x, button_y, button_width, 50};
-        const Rect mark_all_button{button_x + button_width + button_gap, button_y, button_width, 50};
-        const Rect clear_button{button_x + (button_width + button_gap) * 2, button_y, button_width, 50};
+        const Rect toggle_all_button{button_x + button_width + button_gap, button_y, button_width, 50};
         const Rect previous_hit{layout.content.x, layout.content.y, layout.content.w / 3, layout.content.h};
         const Rect next_hit{layout.content.x + layout.content.w * 2 / 3, layout.content.y, layout.content.w / 3,
                             layout.content.h};
@@ -647,14 +669,10 @@ bool review_candidates(std::vector<Candidate>& candidates) {
           pressed_button = ButtonId::Delete;
           press_timer = 0.12;
           toggle_delete();
-        } else if (mark_all_button.contains(mouse_x, mouse_y)) {
-          pressed_button = ButtonId::MarkAll;
+        } else if (toggle_all_button.contains(mouse_x, mouse_y)) {
+          pressed_button = ButtonId::ToggleAll;
           press_timer = 0.12;
-          mark_all_delete();
-        } else if (clear_button.contains(mouse_x, mouse_y)) {
-          pressed_button = ButtonId::Clear;
-          press_timer = 0.12;
-          clear_all_marks();
+          toggle_all();
         } else if (previous_hit.contains(mouse_x, mouse_y) && selected_index > 0) {
           select(selected_index - 1);
         } else if (next_hit.contains(mouse_x, mouse_y) && selected_index + 1 < candidates.size()) {
@@ -673,9 +691,9 @@ bool review_candidates(std::vector<Candidate>& candidates) {
     if (press_timer <= 0.0) {
       pressed_button = ButtonId::None;
     }
-    const double easing = 1.0 - std::exp(-14.0 * delta_seconds);
+    const double easing = 1.0 - std::exp(-18.0 * delta_seconds);
     carousel_position += (static_cast<double>(selected_index) - carousel_position) * easing;
-    if (std::abs(carousel_position - static_cast<double>(selected_index)) < 0.001) {
+    if (std::abs(carousel_position - static_cast<double>(selected_index)) < 0.0001) {
       carousel_position = static_cast<double>(selected_index);
     }
 
@@ -683,21 +701,18 @@ bool review_candidates(std::vector<Candidate>& candidates) {
     int window_height = 0;
     update_logical_render_size(window, renderer, window_width, window_height);
     const Layout layout = compute_layout(window_width, window_height);
-    const int button_width = std::clamp((layout.action.w - 84) / 3, 140, 190);
-    const int button_gap = 16;
-    const int group_width = button_width * 3 + button_gap * 2;
-    const int button_x = layout.action.x + layout.action.w - group_width - 18;
+    const int button_width = std::clamp((layout.action.w - 72) / 2, 160, 220);
+    const int button_gap = 18;
+    const int group_width = button_width * 2 + button_gap;
+    const int button_x = layout.action.x + (layout.action.w - group_width) / 2;
     const int button_y = layout.action.y + layout.action.h - 62;
     const Rect delete_button{button_x, button_y, button_width, 50};
-    const Rect mark_all_button{button_x + button_width + button_gap, button_y, button_width, 50};
-    const Rect clear_button{button_x + (button_width + button_gap) * 2, button_y, button_width, 50};
+    const Rect toggle_all_button{button_x + button_width + button_gap, button_y, button_width, 50};
     hovered_button = ButtonId::None;
     if (delete_button.contains(mouse_x, mouse_y)) {
       hovered_button = ButtonId::Delete;
-    } else if (mark_all_button.contains(mouse_x, mouse_y)) {
-      hovered_button = ButtonId::MarkAll;
-    } else if (clear_button.contains(mouse_x, mouse_y)) {
-      hovered_button = ButtonId::Clear;
+    } else if (toggle_all_button.contains(mouse_x, mouse_y)) {
+      hovered_button = ButtonId::ToggleAll;
     }
     const double header_alpha = ease_out(std::min(1.0, entry_time / 0.20));
     const double content_alpha = ease_out(std::min(1.0, std::max(0.0, entry_time - 0.05) / 0.22));
@@ -707,7 +722,7 @@ bool review_candidates(std::vector<Candidate>& candidates) {
     render_header(renderer, layout.header, selected_index, candidates.size(), candidates[selected_index].review_action,
                   header_alpha);
 
-    const int base = static_cast<int>(std::floor(carousel_position));
+    const int base = static_cast<int>(std::round(carousel_position));
     for (int offset = 3; offset >= -3; --offset) {
       const int candidate_index = base + offset;
       if (candidate_index < 0 || candidate_index >= static_cast<int>(candidates.size())) {
@@ -719,13 +734,13 @@ bool review_candidates(std::vector<Candidate>& candidates) {
     }
 
     const Rect progress{layout.action.x + 18, layout.action.y + layout.action.h - 16, layout.action.w - 36, 6};
-    render_action_area(renderer, layout.action, delete_button, mark_all_button, clear_button,
-                       candidates[selected_index].review_action, hovered_button, pressed_button, action_alpha);
+    render_action_area(renderer, layout.action, delete_button, toggle_all_button, candidates[selected_index].review_action,
+                       hovered_button, pressed_button, action_alpha);
     render_progress(renderer, selected_index, candidates.size(), progress);
     render_footer(renderer, layout.footer);
 
     SDL_RenderPresent(renderer);
-    SDL_Delay(8);
+    SDL_Delay(1);
   }
 
   SDL_DestroyRenderer(renderer);
