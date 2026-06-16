@@ -4,7 +4,7 @@ Trimanga is a command-line tool for cleaning manga archives. It scans folders, i
 
 It is built for people who care about clean, portable manga libraries: fewer interruption pages, smaller archives, better reader navigation.
 
-<img width="1530" height="1886" alt="image" src="https://github.com/user-attachments/assets/8a3fff19-1e5f-4ef8-b7bb-bad128055c9a" />
+<img width="400" height="500" alt="image" src="https://github.com/user-attachments/assets/8a3fff19-1e5f-4ef8-b7bb-bad128055c9a" />
 
 ## Why Trimanga Exists
 
