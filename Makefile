@@ -51,6 +51,7 @@ $(TARGET): $(OBJECTS)
 ifeq ($(UNAME_S),Darwin)
 ifneq ($(strip $(SDL_DYLIB)),)
 	@mkdir -p $(BUILD_DIR)/lib
+	rm -f "$(BUILD_DIR)/lib/$(notdir $(SDL_DYLIB))"
 	cp "$(SDL_DYLIB)" "$(BUILD_DIR)/lib/$(notdir $(SDL_DYLIB))"
 	@install_name=$$(otool -D "$(SDL_DYLIB)" | tail -n 1); \
 	install_name_tool -change "$$install_name" "@executable_path/lib/$(notdir $(SDL_DYLIB))" "$@"

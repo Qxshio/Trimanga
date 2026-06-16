@@ -705,6 +705,10 @@ bool review_candidates(std::vector<Candidate>& candidates) {
     hovered_button = ButtonId::None;
     pressed_button = ButtonId::None;
     SDL_SetWindowTitle(window, "Trimanga Review - confirming selection");
+    if (!window_hidden) {
+      SDL_HideWindow(window);
+      window_hidden = true;
+    }
   };
 
   bool running = true;
@@ -826,6 +830,7 @@ bool review_candidates(std::vector<Candidate>& candidates) {
       escape_hold_time += delta_seconds;
       if (escape_hold_time >= 1.0) {
         start_confirm();
+        running = false;
       }
     }
     if (confirming) {
