@@ -34,6 +34,8 @@ std::string squash_ws(std::string value) {
 
 class TesseractBackend final : public IOcrBackend {
  public:
+  explicit TesseractBackend(OcrSpeed speed) : speed_(speed) {}
+
   std::string name() const override { return "Tesseract"; }
 
   bool available() const override {
@@ -67,7 +69,9 @@ class TesseractBackend final : public IOcrBackend {
 
     std::set<std::string> seen;
     std::string combined;
-    for (const std::string& psm : {"6", "11", "12"}) {
+    const std::vector<std::string> modes = speed_ == OcrSpeed::Fast ? std::vector<std::string>{"6"}
+                                                                    : std::vector<std::string>{"6", "11", "12"};
+    for (const std::string& psm : modes) {
       ProcessResult result = run_process({binary, image_path.string(), "stdout", "--psm", psm}, 30);
       if (result.exit_code != 0) {
         continue;
@@ -83,12 +87,15 @@ class TesseractBackend final : public IOcrBackend {
     }
     return combined;
   }
+
+ private:
+  OcrSpeed speed_;
 };
 
 }  // namespace
 
-std::unique_ptr<IOcrBackend> make_tesseract_backend() {
-  return std::make_unique<TesseractBackend>();
+std::unique_ptr<IOcrBackend> make_tesseract_backend(OcrSpeed speed) {
+  return std::make_unique<TesseractBackend>(speed);
 }
 
 }  // namespace trimanga

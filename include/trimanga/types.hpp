@@ -76,8 +76,14 @@ enum class OutputFormat {
   Json,
 };
 
+enum class OcrSpeed {
+  Accurate,
+  Fast,
+};
+
 struct ScanOptions {
   OcrPreference ocr = OcrPreference::Auto;
+  OcrSpeed ocr_speed = OcrSpeed::Accurate;
   int workers = 4;
   OutputFormat format = OutputFormat::Table;
   std::optional<std::filesystem::path> review_dir;

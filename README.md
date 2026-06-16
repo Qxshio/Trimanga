@@ -163,6 +163,7 @@ Options:
 
 ```text
 --ocr auto|apple|tesseract   OCR backend to use. Default: auto
+--ocr-speed accurate|fast     OCR recognition mode. Default: accurate
 --workers N                  Number of OCR workers. Default: 4
 --format table|json          Output format. Default: table
 --review-dir PATH            Copy suspicious pages into this folder
@@ -173,6 +174,14 @@ Options:
 
 The default table output is intentionally compact. Use `--details` when you want to inspect the OCR text that caused each page to be flagged.
 Use `--timings` to see where time is spent across extraction, page profiling, OCR, visual matching, and review export.
+
+For faster scans, use:
+
+```sh
+trimanga scan "./Volume 01.cbz" --workers 8 --ocr-speed fast --timings
+```
+
+Fast OCR is useful for large libraries and review-first workflows. Accurate OCR remains the default because compact credit pages can contain small text.
 
 ## Package Builds
 

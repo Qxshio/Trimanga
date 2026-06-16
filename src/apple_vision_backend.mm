@@ -28,6 +28,8 @@ std::string join_lines(NSArray<VNRecognizedTextObservation*>* observations) {
 
 class AppleVisionBackend final : public IOcrBackend {
  public:
+  explicit AppleVisionBackend(OcrSpeed speed) : speed_(speed) {}
+
   std::string name() const override { return "Apple Vision"; }
 
   bool available() const override {
@@ -56,8 +58,10 @@ class AppleVisionBackend final : public IOcrBackend {
             }
             output = join_lines((NSArray<VNRecognizedTextObservation*>*)[req results]);
           }];
-      [request setRecognitionLevel:VNRequestTextRecognitionLevelAccurate];
+      [request setRecognitionLevel:speed_ == OcrSpeed::Fast ? VNRequestTextRecognitionLevelFast
+                                                            : VNRequestTextRecognitionLevelAccurate];
       [request setUsesLanguageCorrection:NO];
+      [request setRecognitionLanguages:@[ @"en-US" ]];
 
       VNImageRequestHandler* handler = [[VNImageRequestHandler alloc] initWithCIImage:image options:@{}];
       NSError* error = nil;
@@ -68,12 +72,15 @@ class AppleVisionBackend final : public IOcrBackend {
       return output;
     }
   }
+
+ private:
+  OcrSpeed speed_;
 };
 
 }  // namespace
 
-std::unique_ptr<IOcrBackend> make_apple_vision_backend() {
-  return std::make_unique<AppleVisionBackend>();
+std::unique_ptr<IOcrBackend> make_apple_vision_backend(OcrSpeed speed) {
+  return std::make_unique<AppleVisionBackend>(speed);
 }
 
 }  // namespace trimanga

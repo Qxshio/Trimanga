@@ -12,4 +12,6 @@
 - Added CMake, Makefile, smoke tests, CI, and package manager templates.
 - Kept normal scan output compact by default, with `--details` for OCR excerpts.
 - Parallelized page profiling so `--workers` applies to image analysis as well as OCR.
+- Overlapped page profiling and OCR so the scanner does less full-volume waiting between phases.
+- Added `--ocr-speed fast` for faster Apple Vision and Tesseract scans.
 - Added `--timings` for scan phase benchmarks.

@@ -19,6 +19,7 @@ void print_help() {
       << "  trimanga scan <folder-or-cbz> [options]\n\n"
       << "Options:\n"
       << "  --ocr <auto|apple|tesseract>   OCR backend to use. Default: auto\n"
+      << "  --ocr-speed <accurate|fast>     OCR recognition mode. Default: accurate\n"
       << "  --workers <n>                  Number of OCR workers. Default: 4\n"
       << "  --format <table|json>          Output format. Default: table\n"
       << "  --review-dir <path>            Copy suspicious pages into this folder\n"
@@ -53,6 +54,16 @@ trimanga::OutputFormat parse_format(const std::string& value) {
     return trimanga::OutputFormat::Json;
   }
   throw std::runtime_error("invalid output format: " + value);
+}
+
+trimanga::OcrSpeed parse_ocr_speed(const std::string& value) {
+  if (value == "accurate") {
+    return trimanga::OcrSpeed::Accurate;
+  }
+  if (value == "fast") {
+    return trimanga::OcrSpeed::Fast;
+  }
+  throw std::runtime_error("invalid OCR speed: " + value);
 }
 
 std::string require_value(int& index, int argc, char** argv, const std::string& option) {
@@ -92,6 +103,8 @@ int main(int argc, char** argv) {
       }
       if (arg == "--ocr") {
         options.ocr = parse_ocr(require_value(index, argc, argv, arg));
+      } else if (arg == "--ocr-speed") {
+        options.ocr_speed = parse_ocr_speed(require_value(index, argc, argv, arg));
       } else if (arg == "--workers") {
         options.workers = std::max(1, std::stoi(require_value(index, argc, argv, arg)));
       } else if (arg == "--format") {

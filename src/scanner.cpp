@@ -336,14 +336,16 @@ void parallel_pages(std::vector<PageRef>& pages, int workers, Func&& func) {
   }
 }
 
-VolumeProfile build_volume_profile_parallel(std::vector<PageRef>& pages, int workers) {
+void extract_features_parallel(std::vector<PageRef>& pages, int workers) {
   if (pages.empty()) {
-    return {};
+    return;
   }
   parallel_pages(pages, workers, [](PageRef& page, std::size_t) {
     page.features = extract_page_features(page.image_path);
   });
+}
 
+VolumeProfile build_volume_profile_from_features(const std::vector<PageRef>& pages) {
   std::vector<double> aspect;
   std::vector<double> edge;
   std::vector<double> entropy;
@@ -438,11 +440,7 @@ ScanResult scan(const fs::path& input, const ScanOptions& options) {
   }
 
   const int workers = std::min<int>(options.workers, static_cast<int>(pages.size()));
-  status_line(options, "Found " + std::to_string(pages.size()) + " pages. Building page profile with " +
-                           std::to_string(workers) + " workers...");
-  VolumeProfile profile = build_volume_profile_parallel(pages, workers);
-  const auto profiled_at = std::chrono::steady_clock::now();
-  auto backend = make_ocr_backend(options.ocr);
+  auto backend = make_ocr_backend(options.ocr, options.ocr_speed);
 
   ScanResult result;
   result.input = input;
@@ -452,38 +450,39 @@ ScanResult scan(const fs::path& input, const ScanOptions& options) {
   result.details = options.details;
   result.timings = options.timings;
   result.prepare_time = prepared_at - started_at;
-  result.profile_time = profiled_at - prepared_at;
 
-  std::atomic_size_t next{0};
-  std::atomic_size_t done{0};
-  std::mutex candidates_mutex;
+  std::vector<std::string> page_texts(pages.size());
+  std::atomic_size_t next_ocr{0};
+  std::atomic_size_t done_ocr{0};
   std::mutex progress_mutex;
   std::vector<std::thread> threads;
   threads.reserve(static_cast<std::size_t>(workers));
 
-  status_line(options, "Using " + result.ocr_backend + ". Scanning with " + std::to_string(workers) + " workers...");
+  status_line(options, "Found " + std::to_string(pages.size()) + " pages. Analyzing with " + std::to_string(workers) +
+                           " workers...");
+  status_line(options, "Using " + result.ocr_backend +
+                           (options.ocr_speed == OcrSpeed::Fast ? " in fast mode." : " in accurate mode."));
   TerminalOutput terminal(options.format == OutputFormat::Table);
   ScopedSystemOutputSilencer silence_system_warnings(options.format == OutputFormat::Table && !options.details);
 
+  const auto profile_started_at = std::chrono::steady_clock::now();
+  std::chrono::steady_clock::time_point profile_finished_at;
+  std::thread profile_thread([&] {
+    extract_features_parallel(pages, workers);
+    profile_finished_at = std::chrono::steady_clock::now();
+  });
+
+  const auto ocr_started_at = std::chrono::steady_clock::now();
   for (int worker = 0; worker < workers; ++worker) {
     threads.emplace_back([&] {
       while (true) {
-        const std::size_t index = next.fetch_add(1);
+        const std::size_t index = next_ocr.fetch_add(1);
         if (index >= pages.size()) {
           return;
         }
         const PageRef& page = pages[index];
-        std::string text = backend->read_text(page.image_path);
-        Classification classification = classify_page(text, page.features, profile);
-        if (classification.candidate) {
-          Candidate candidate;
-          candidate.page = page;
-          candidate.classification = classification;
-          candidate.text_excerpt = excerpt(text);
-          std::lock_guard<std::mutex> lock(candidates_mutex);
-          result.candidates.push_back(std::move(candidate));
-        }
-        const std::size_t finished = done.fetch_add(1) + 1;
+        page_texts[index] = backend->read_text(page.image_path);
+        const std::size_t finished = done_ocr.fetch_add(1) + 1;
         if (options.format == OutputFormat::Table) {
           std::lock_guard<std::mutex> lock(progress_mutex);
           progress_line(options, terminal, finished, pages.size());
@@ -495,16 +494,47 @@ ScanResult scan(const fs::path& input, const ScanOptions& options) {
   for (std::thread& thread : threads) {
     thread.join();
   }
+  profile_thread.join();
   if (options.format == OutputFormat::Table) {
     progress_line(options, terminal, pages.size(), pages.size());
     terminal.write("\n");
   }
-  const auto ocr_finished_at = std::chrono::steady_clock::now();
-  result.ocr_time = ocr_finished_at - profiled_at;
+
+  VolumeProfile profile = build_volume_profile_from_features(pages);
+  std::mutex candidates_mutex;
+  std::atomic_size_t next_classify{0};
+  std::vector<std::thread> classify_threads;
+  classify_threads.reserve(static_cast<std::size_t>(workers));
+  for (int worker = 0; worker < workers; ++worker) {
+    classify_threads.emplace_back([&] {
+      while (true) {
+        const std::size_t index = next_classify.fetch_add(1);
+        if (index >= pages.size()) {
+          return;
+        }
+        Classification classification = classify_page(page_texts[index], pages[index].features, profile);
+        if (!classification.candidate) {
+          continue;
+        }
+        Candidate candidate;
+        candidate.page = pages[index];
+        candidate.classification = classification;
+        candidate.text_excerpt = excerpt(page_texts[index]);
+        std::lock_guard<std::mutex> lock(candidates_mutex);
+        result.candidates.push_back(std::move(candidate));
+      }
+    });
+  }
+  for (std::thread& thread : classify_threads) {
+    thread.join();
+  }
+  const auto classified_at = std::chrono::steady_clock::now();
+  result.profile_time = profile_finished_at - profile_started_at;
+  result.ocr_time = classified_at - ocr_started_at;
 
   add_visual_matches(result.candidates, pages);
   const auto visual_matched_at = std::chrono::steady_clock::now();
-  result.visual_match_time = visual_matched_at - ocr_finished_at;
+  result.visual_match_time = visual_matched_at - classified_at;
   std::sort(result.candidates.begin(), result.candidates.end(), [](const Candidate& left, const Candidate& right) {
     return left.page.order < right.page.order;
   });
@@ -536,6 +566,7 @@ void print_result_table(const ScanResult& result) {
       std::cout << "  Review copy:   " << seconds(result.review_copy_time) << "\n";
     }
     std::cout << "  Total:         " << seconds(result.total_time) << "\n\n";
+    std::cout << "Profile and OCR work can overlap, so phase times may not add up to total time.\n\n";
   }
 
   if (result.candidates.empty()) {

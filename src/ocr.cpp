@@ -4,10 +4,10 @@
 
 namespace trimanga {
 
-std::unique_ptr<IOcrBackend> make_ocr_backend(OcrPreference preference) {
+std::unique_ptr<IOcrBackend> make_ocr_backend(OcrPreference preference, OcrSpeed speed) {
 #if defined(TRIMANGA_APPLE)
   if (preference == OcrPreference::AppleVision || preference == OcrPreference::Auto) {
-    auto apple = make_apple_vision_backend();
+    auto apple = make_apple_vision_backend(speed);
     if (apple && apple->available()) {
       return apple;
     }
@@ -21,7 +21,7 @@ std::unique_ptr<IOcrBackend> make_ocr_backend(OcrPreference preference) {
   }
 #endif
 
-  auto tesseract = make_tesseract_backend();
+  auto tesseract = make_tesseract_backend(speed);
   if (tesseract && tesseract->available()) {
     return tesseract;
   }
