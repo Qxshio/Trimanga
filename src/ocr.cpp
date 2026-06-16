@@ -19,6 +19,13 @@ std::unique_ptr<IOcrBackend> make_ocr_backend(OcrPreference preference, OcrSpeed
   if (preference == OcrPreference::None) {
     return std::make_unique<NoOcrBackend>();
   }
+  if (preference == OcrPreference::Trimanga) {
+    auto trimanga = make_trimanga_ocr_backend();
+    if (trimanga && trimanga->available()) {
+      return trimanga;
+    }
+    throw std::runtime_error("Trimanga OCR is not available on this build");
+  }
 
 #if defined(TRIMANGA_APPLE)
   if (preference == OcrPreference::AppleVision || preference == OcrPreference::Auto) {

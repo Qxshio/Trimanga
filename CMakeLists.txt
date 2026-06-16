@@ -32,6 +32,7 @@ if(APPLE)
   target_sources(trimanga PRIVATE
     src/apple_vision_backend.mm
     src/image_features_macos.mm
+    src/trimanga_ocr_backend.mm
   )
   target_compile_definitions(trimanga PRIVATE TRIMANGA_APPLE=1)
   target_link_libraries(trimanga PRIVATE
@@ -42,7 +43,10 @@ if(APPLE)
     "-framework ImageIO"
   )
 else()
-  target_sources(trimanga PRIVATE src/image_features_stub.cpp)
+  target_sources(trimanga PRIVATE
+    src/image_features_stub.cpp
+    src/trimanga_ocr_backend_stub.cpp
+  )
 endif()
 
 if(MSVC)

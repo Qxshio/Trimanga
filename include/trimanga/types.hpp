@@ -68,6 +68,7 @@ struct Candidate {
 enum class OcrPreference {
   Auto,
   AppleVision,
+  Trimanga,
   Tesseract,
   None,
 };

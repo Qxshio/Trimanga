@@ -162,7 +162,7 @@ trimanga scan "./Volume 01.cbz" --format json
 Options:
 
 ```text
---ocr auto|apple|tesseract|none
+--ocr auto|apple|trimanga|tesseract|none
                               OCR backend to use. Default: auto
 --ocr-speed accurate|fast     OCR recognition mode. Default: accurate
 --workers N                  Number of OCR workers. Default: 4
@@ -191,6 +191,14 @@ trimanga scan "./Volume 01.cbz" --ocr none --timings
 ```
 
 `--ocr none` avoids OCR entirely. It is very lightweight, but it cannot read credit/recruitment text, so it should be treated as a quick visual pass rather than a full scan.
+
+For Trimanga's experimental built-in detector:
+
+```sh
+trimanga scan "./Volume 01.cbz" --ocr trimanga --timings
+```
+
+`--ocr trimanga` is dependency-free and fast. It does not perform general-purpose OCR; it analyzes page layout for credit-card and notice-page patterns, then emits internal cleanup signals. Use it as a native fallback when Apple Vision is unavailable and Tesseract is too heavy.
 
 ## Package Builds
 

@@ -20,6 +20,18 @@ Use fast mode to reduce Tesseract work:
 trimanga scan "./Volume.cbz" --ocr tesseract --ocr-speed fast
 ```
 
+### Trimanga OCR
+
+Experimental built-in backend:
+
+```sh
+trimanga scan "./Volume.cbz" --ocr trimanga
+```
+
+This is not a full OCR engine. It is a dependency-free cleanup detector that looks for text-card layouts, centered credit blocks, sparse notice pages, and other visual structures commonly used by scanlation credits or ads. When it sees a strong pattern, it emits synthetic cleanup tokens into the same classifier pipeline used by full OCR backends.
+
+This keeps the scanner fast and dependency-light, but it will not read arbitrary dialogue or small text. It is intended as a native fallback, not a replacement for Apple Vision.
+
 ### None
 
 Disables OCR:
@@ -48,4 +60,6 @@ An ONNX backend would still be a dependency, but it can be faster and more contr
 
 ### Custom OCR
 
-Building a high-quality OCR engine inside Trimanga is not realistic for this project. OCR requires text detection, orientation handling, recognition models, language handling, training data, and platform-specific acceleration. The maintainable approach is to keep a clean backend interface and use native OCR where possible.
+Building a high-quality general OCR engine inside Trimanga is not realistic for this project. OCR requires text detection, orientation handling, recognition models, language handling, training data, and platform-specific acceleration.
+
+Trimanga's built-in OCR backend deliberately avoids that scope. It performs specialized cleanup-signal detection for manga archive maintenance. The maintainable approach is to keep the backend interface clean, use native OCR where possible, and improve the built-in detector as a fast fallback for pages that match known removable-page layouts.

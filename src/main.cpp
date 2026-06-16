@@ -18,7 +18,7 @@ void print_help() {
       << "Usage:\n"
       << "  trimanga scan <folder-or-cbz> [options]\n\n"
       << "Options:\n"
-      << "  --ocr <auto|apple|tesseract|none>\n"
+      << "  --ocr <auto|apple|trimanga|tesseract|none>\n"
       << "                                  OCR backend to use. Default: auto\n"
       << "  --ocr-speed <accurate|fast>     OCR recognition mode. Default: accurate\n"
       << "  --workers <n>                  Number of OCR workers. Default: 4\n"
@@ -40,6 +40,9 @@ trimanga::OcrPreference parse_ocr(const std::string& value) {
   }
   if (value == "apple" || value == "apple-vision" || value == "vision") {
     return trimanga::OcrPreference::AppleVision;
+  }
+  if (value == "trimanga" || value == "builtin" || value == "custom") {
+    return trimanga::OcrPreference::Trimanga;
   }
   if (value == "tesseract") {
     return trimanga::OcrPreference::Tesseract;

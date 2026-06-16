@@ -14,7 +14,8 @@ SOURCES := \
 	src/scanner.cpp \
 	src/tesseract_backend.cpp \
 	src/apple_vision_backend.mm \
-	src/image_features_macos.mm
+	src/image_features_macos.mm \
+	src/trimanga_ocr_backend.mm
 
 OBJECTS := $(patsubst src/%,$(BUILD_DIR)/%.o,$(SOURCES))
 

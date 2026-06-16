@@ -17,6 +17,7 @@ class IOcrBackend {
 };
 
 std::unique_ptr<IOcrBackend> make_ocr_backend(OcrPreference preference, OcrSpeed speed);
+std::unique_ptr<IOcrBackend> make_trimanga_ocr_backend();
 std::unique_ptr<IOcrBackend> make_tesseract_backend(OcrSpeed speed);
 
 #if defined(TRIMANGA_APPLE)
