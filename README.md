@@ -166,8 +166,11 @@ Options:
 --workers N                  Number of OCR workers. Default: 4
 --format table|json          Output format. Default: table
 --review-dir PATH            Copy suspicious pages into this folder
+--details                    Include OCR excerpts in table output
 --keep-temp                  Keep extracted archive temp files
 ```
+
+The default table output is intentionally compact. Use `--details` when you want to inspect the OCR text that caused each page to be flagged.
 
 ## Package Builds
 

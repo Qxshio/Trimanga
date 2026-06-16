@@ -22,6 +22,7 @@ void print_help() {
       << "  --workers <n>                  Number of OCR workers. Default: 4\n"
       << "  --format <table|json>          Output format. Default: table\n"
       << "  --review-dir <path>            Copy suspicious pages into this folder\n"
+      << "  --details                      Include OCR excerpts in table output\n"
       << "  --keep-temp                    Keep extracted archive temp files\n"
       << "  --help                         Show this help\n"
       << "  --version                      Show version\n\n"
@@ -96,6 +97,8 @@ int main(int argc, char** argv) {
         options.format = parse_format(require_value(index, argc, argv, arg));
       } else if (arg == "--review-dir") {
         options.review_dir = fs::path(require_value(index, argc, argv, arg));
+      } else if (arg == "--details") {
+        options.details = true;
       } else if (arg == "--keep-temp") {
         options.keep_temp = true;
       } else {

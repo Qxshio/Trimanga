@@ -81,6 +81,7 @@ struct ScanOptions {
   OutputFormat format = OutputFormat::Table;
   std::optional<std::filesystem::path> review_dir;
   bool keep_temp = false;
+  bool details = false;
 };
 
 struct ScanResult {
@@ -88,6 +89,7 @@ struct ScanResult {
   std::string ocr_backend;
   std::string detector_version;
   std::size_t scanned_pages = 0;
+  bool details = false;
   std::vector<Candidate> candidates;
 };
 

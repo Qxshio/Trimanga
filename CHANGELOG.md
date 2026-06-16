@@ -10,3 +10,4 @@
 - Added review folder export.
 - Added JSON output.
 - Added CMake, Makefile, smoke tests, CI, and package manager templates.
+- Kept normal scan output compact by default, with `--details` for OCR excerpts.

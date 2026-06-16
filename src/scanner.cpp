@@ -8,6 +8,7 @@
 #include <algorithm>
 #include <atomic>
 #include <filesystem>
+#include <fstream>
 #include <iomanip>
 #include <iostream>
 #include <mutex>
@@ -17,6 +18,11 @@
 #include <thread>
 #include <unordered_set>
 #include <vector>
+
+#if !defined(_WIN32)
+#include <fcntl.h>
+#include <unistd.h>
+#endif
 
 namespace fs = std::filesystem;
 
@@ -46,6 +52,92 @@ class TempDirectory {
  private:
   fs::path path_;
   bool keep_ = false;
+};
+
+class TerminalOutput {
+ public:
+  explicit TerminalOutput(bool enabled) : enabled_(enabled) {
+#if !defined(_WIN32)
+    if (enabled_) {
+      terminal_.open("/dev/tty");
+    }
+#endif
+  }
+
+  void write(const std::string& message) {
+    if (!enabled_) {
+      return;
+    }
+#if !defined(_WIN32)
+    if (terminal_.is_open()) {
+      terminal_ << message << std::flush;
+      return;
+    }
+#endif
+    std::cout << message << std::flush;
+  }
+
+ private:
+  bool enabled_ = false;
+#if !defined(_WIN32)
+  std::ofstream terminal_;
+#endif
+};
+
+class ScopedSystemOutputSilencer {
+ public:
+  explicit ScopedSystemOutputSilencer(bool enabled) : enabled_(enabled) {
+#if !defined(_WIN32)
+    if (!enabled_) {
+      return;
+    }
+    fflush(stdout);
+    fflush(stderr);
+    saved_stdout_fd_ = dup(STDOUT_FILENO);
+    saved_fd_ = dup(STDERR_FILENO);
+    null_fd_ = open("/dev/null", O_WRONLY);
+    if (saved_fd_ >= 0 && null_fd_ >= 0) {
+      if (saved_stdout_fd_ >= 0) {
+        dup2(null_fd_, STDOUT_FILENO);
+      }
+      dup2(null_fd_, STDERR_FILENO);
+    }
+#else
+    (void)enabled_;
+#endif
+  }
+
+  ScopedSystemOutputSilencer(const ScopedSystemOutputSilencer&) = delete;
+  ScopedSystemOutputSilencer& operator=(const ScopedSystemOutputSilencer&) = delete;
+
+  ~ScopedSystemOutputSilencer() {
+#if !defined(_WIN32)
+    if (!enabled_) {
+      return;
+    }
+    fflush(stdout);
+    fflush(stderr);
+    if (saved_stdout_fd_ >= 0) {
+      dup2(saved_stdout_fd_, STDOUT_FILENO);
+      close(saved_stdout_fd_);
+    }
+    if (saved_fd_ >= 0) {
+      dup2(saved_fd_, STDERR_FILENO);
+      close(saved_fd_);
+    }
+    if (null_fd_ >= 0) {
+      close(null_fd_);
+    }
+#endif
+  }
+
+ private:
+  bool enabled_ = false;
+#if !defined(_WIN32)
+  int saved_stdout_fd_ = -1;
+  int saved_fd_ = -1;
+  int null_fd_ = -1;
+#endif
 };
 
 std::string escape_json(const std::string& value) {
@@ -187,6 +279,22 @@ std::string bar(double fraction, int width = 18) {
   return value;
 }
 
+void status_line(const ScanOptions& options, const std::string& message) {
+  if (options.format == OutputFormat::Table) {
+    std::cout << message << "\n";
+  }
+}
+
+void progress_line(const ScanOptions& options, TerminalOutput& terminal, std::size_t finished, std::size_t total) {
+  if (options.format != OutputFormat::Table) {
+    return;
+  }
+  std::ostringstream line;
+  line << "\r\033[2KScanning pages " << bar(static_cast<double>(finished) / static_cast<double>(total)) << ' '
+       << finished << '/' << total;
+  terminal.write(line.str());
+}
+
 }  // namespace
 
 ScanResult scan(const fs::path& input, const ScanOptions& options) {
@@ -196,6 +304,8 @@ ScanResult scan(const fs::path& input, const ScanOptions& options) {
   if (!fs::exists(input)) {
     throw std::runtime_error("input does not exist: " + input.string());
   }
+
+  status_line(options, "Preparing input...");
 
   TempDirectory temp;
   std::vector<PageRef> pages = build_page_refs(input, temp);
@@ -207,9 +317,11 @@ ScanResult scan(const fs::path& input, const ScanOptions& options) {
     empty.input = input;
     empty.detector_version = kDetectorVersion;
     empty.ocr_backend = "none";
+    empty.details = options.details;
     return empty;
   }
 
+  status_line(options, "Found " + std::to_string(pages.size()) + " pages. Building page profile...");
   VolumeProfile profile = build_volume_profile(pages);
   auto backend = make_ocr_backend(options.ocr);
 
@@ -218,6 +330,7 @@ ScanResult scan(const fs::path& input, const ScanOptions& options) {
   result.detector_version = kDetectorVersion;
   result.ocr_backend = backend->name();
   result.scanned_pages = pages.size();
+  result.details = options.details;
 
   std::atomic_size_t next{0};
   std::atomic_size_t done{0};
@@ -226,6 +339,10 @@ ScanResult scan(const fs::path& input, const ScanOptions& options) {
   const int workers = std::min<int>(options.workers, static_cast<int>(pages.size()));
   std::vector<std::thread> threads;
   threads.reserve(static_cast<std::size_t>(workers));
+
+  status_line(options, "Using " + result.ocr_backend + ". Scanning with " + std::to_string(workers) + " workers...");
+  TerminalOutput terminal(options.format == OutputFormat::Table);
+  ScopedSystemOutputSilencer silence_system_warnings(options.format == OutputFormat::Table && !options.details);
 
   for (int worker = 0; worker < workers; ++worker) {
     threads.emplace_back([&] {
@@ -248,8 +365,7 @@ ScanResult scan(const fs::path& input, const ScanOptions& options) {
         const std::size_t finished = done.fetch_add(1) + 1;
         if (options.format == OutputFormat::Table) {
           std::lock_guard<std::mutex> lock(progress_mutex);
-          std::cerr << "\rScanning " << bar(static_cast<double>(finished) / static_cast<double>(pages.size())) << ' '
-                    << finished << '/' << pages.size() << std::flush;
+          progress_line(options, terminal, finished, pages.size());
         }
       }
     });
@@ -259,7 +375,8 @@ ScanResult scan(const fs::path& input, const ScanOptions& options) {
     thread.join();
   }
   if (options.format == OutputFormat::Table) {
-    std::cerr << "\rScanning " << bar(1.0) << ' ' << pages.size() << '/' << pages.size() << "\n";
+    progress_line(options, terminal, pages.size(), pages.size());
+    terminal.write("\n");
   }
 
   add_visual_matches(result.candidates, pages);
@@ -281,21 +398,24 @@ void print_result_table(const ScanResult& result) {
   std::cout << "Pages recommended for review: " << result.candidates.size() << "\n\n";
 
   if (result.candidates.empty()) {
-    std::cout << "No suspicious pages found.\n";
+    std::cout << "No review candidates found.\n";
     return;
   }
 
   std::cout << std::left << std::setw(8) << "Page" << std::setw(10) << "Score" << std::setw(10) << "Reason"
             << "File\n";
-  std::cout << std::string(78, '-') << "\n";
+  std::cout << std::string(72, '-') << "\n";
   for (const Candidate& candidate : result.candidates) {
     std::string reason = candidate.visual_match ? "visual" : "ocr";
     std::cout << std::left << std::setw(8) << candidate.page.order << std::setw(10) << std::fixed
               << std::setprecision(1) << candidate.classification.score << std::setw(10) << reason
               << candidate.page.archive_name << "\n";
-    if (!candidate.text_excerpt.empty()) {
+    if (result.details && !candidate.text_excerpt.empty()) {
       std::cout << "          " << candidate.text_excerpt << "\n";
     }
+  }
+  if (!result.details) {
+    std::cout << "\nRun again with --details to include OCR excerpts for each review candidate.\n";
   }
 }
 
