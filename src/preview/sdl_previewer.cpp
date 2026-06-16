@@ -88,7 +88,7 @@ Layout compute_layout(int window_width, int window_height) {
   constexpr int gap = 14;
   const int header_height = std::clamp(window_height / 9, 76, 104);
   const int footer_height = 44;
-  const int action_height = std::clamp(window_height / 8, 112, 132);
+  const int action_height = std::clamp(window_height / 10, 84, 104);
 
   Layout layout;
   layout.header = Rect{margin, margin, window_width - margin * 2, header_height};
@@ -138,11 +138,26 @@ void draw_x(SDL_Renderer* renderer, int cx, int cy, SDL_Color color) {
   thick_line(renderer, cx + 12, cy - 12, cx - 12, cy + 12, color, 4);
 }
 
-void draw_arrow_pair(SDL_Renderer* renderer, int cx, int cy, SDL_Color color) {
-  thick_line(renderer, cx - 12, cy, cx - 3, cy - 8, color, 2);
-  thick_line(renderer, cx - 12, cy, cx - 3, cy + 8, color, 2);
-  thick_line(renderer, cx + 12, cy, cx + 3, cy - 8, color, 2);
-  thick_line(renderer, cx + 12, cy, cx + 3, cy + 8, color, 2);
+void draw_spacebar(SDL_Renderer* renderer, const Rect& rect, SDL_Color color) {
+  outline(renderer, rect, color);
+  line(renderer, rect.x + 8, rect.y + rect.h - 8, rect.x + rect.w - 8, rect.y + rect.h - 8, color);
+  line(renderer, rect.x + 8, rect.y + rect.h - 8, rect.x + 8, rect.y + rect.h - 14, color);
+  line(renderer, rect.x + rect.w - 8, rect.y + rect.h - 8, rect.x + rect.w - 8, rect.y + rect.h - 14, color);
+}
+
+void draw_arrow_key(SDL_Renderer* renderer, int x, int y, bool left, SDL_Color color) {
+  const Rect cap{x, y, 28, 24};
+  fill(renderer, cap, SDL_Color{255, 239, 246, 255});
+  outline(renderer, cap, color);
+  const int cx = cap.x + cap.w / 2;
+  const int cy = cap.y + cap.h / 2;
+  if (left) {
+    thick_line(renderer, cx - 7, cy, cx + 7, cy - 7, color, 2);
+    thick_line(renderer, cx - 7, cy, cx + 7, cy + 7, color, 2);
+  } else {
+    thick_line(renderer, cx + 7, cy, cx - 7, cy - 7, color, 2);
+    thick_line(renderer, cx + 7, cy, cx - 7, cy + 7, color, 2);
+  }
 }
 
 std::array<std::uint8_t, 7> glyph(char ch) {
@@ -478,11 +493,6 @@ void render_action_area(SDL_Renderer* renderer, const Rect& action, const Rect& 
   fill(renderer, action, mix(kCanvas, kPaper, alpha));
   outline(renderer, action, SDL_Color{219, 166, 190, static_cast<Uint8>(255 * alpha)});
   const bool marked_delete = current_action == ReviewAction::Delete;
-  draw_text(renderer, action.x + 18, action.y + 18, marked_delete ? "CURRENT PAGE DELETE" : "CURRENT PAGE KEEP",
-            marked_delete ? kDelete : kAccent, 2);
-  if (delete_button.x > action.x + 430 && action.h >= 108) {
-    draw_text(renderer, action.x + 18, action.y + 48, "TOGGLE ONLY PAGES YOU WANT REMOVED", kMuted, 2);
-  }
 
   render_button(renderer, delete_button, kDeleteSoft, kDelete, marked_delete ? "UNDO" : "DELETE", marked_delete,
                 hovered == ButtonId::Delete, pressed == ButtonId::Delete);
@@ -491,8 +501,7 @@ void render_action_area(SDL_Renderer* renderer, const Rect& action, const Rect& 
 
   fill_circle(renderer, delete_button.x + 28, delete_button.y + 25, 15, kDelete);
   draw_x(renderer, delete_button.x + 28, delete_button.y + 25, kCanvas);
-  fill_circle(renderer, toggle_all_button.x + 28, toggle_all_button.y + 25, 15, kAccent);
-  draw_arrow_pair(renderer, toggle_all_button.x + 28, toggle_all_button.y + 25, kPaper);
+  draw_keycap(renderer, toggle_all_button.x + 14, toggle_all_button.y + 13, "T", kAccent);
 }
 
 void render_footer(SDL_Renderer* renderer, const Rect& footer) {
@@ -501,23 +510,21 @@ void render_footer(SDL_Renderer* renderer, const Rect& footer) {
   int x = footer.x + 14;
   const int y = footer.y + 10;
   draw_keycap(renderer, x, y, "ESC", kMuted);
-  x += 48;
+  x += 52;
   draw_text(renderer, x, y + 5, "CONFIRM", kMuted, 2);
-  x += 118;
-  draw_arrow_pair(renderer, x + 12, y + 12, kMuted);
+  x += 124;
+  draw_arrow_key(renderer, x, y, true, kMuted);
   x += 34;
+  draw_arrow_key(renderer, x, y, false, kMuted);
+  x += 40;
   draw_text(renderer, x, y + 5, "SCROLL", kMuted, 2);
 
-  int right = footer.x + footer.w - 358;
-  draw_keycap(renderer, right, y, "SP", kMuted);
-  right += 42;
-  draw_keycap(renderer, right, y, "X", kDelete);
-  right += 34;
+  int right = footer.x + footer.w - 218;
+  draw_spacebar(renderer, Rect{right, y, 48, 24}, kMuted);
+  right += 58;
+  draw_keycap(renderer, right, y, "X", kMuted);
+  right += 38;
   draw_text(renderer, right, y + 5, "TOGGLE", kMuted, 2);
-  right += 98;
-  draw_keycap(renderer, right, y, "T", kAccent);
-  right += 34;
-  draw_text(renderer, right, y + 5, "TOGGLE ALL", kMuted, 2);
 }
 
 void update_logical_render_size(SDL_Window* window, SDL_Renderer* renderer, int& window_width, int& window_height) {
@@ -657,7 +664,7 @@ bool review_candidates(std::vector<Candidate>& candidates) {
         const int button_gap = 18;
         const int group_width = button_width * 2 + button_gap;
         const int button_x = layout.action.x + (layout.action.w - group_width) / 2;
-        const int button_y = layout.action.y + layout.action.h - 62;
+        const int button_y = layout.action.y + 28;
         const Rect delete_button{button_x, button_y, button_width, 50};
         const Rect toggle_all_button{button_x + button_width + button_gap, button_y, button_width, 50};
         const Rect previous_hit{layout.content.x, layout.content.y, layout.content.w / 3, layout.content.h};
@@ -705,7 +712,7 @@ bool review_candidates(std::vector<Candidate>& candidates) {
     const int button_gap = 18;
     const int group_width = button_width * 2 + button_gap;
     const int button_x = layout.action.x + (layout.action.w - group_width) / 2;
-    const int button_y = layout.action.y + layout.action.h - 62;
+    const int button_y = layout.action.y + 28;
     const Rect delete_button{button_x, button_y, button_width, 50};
     const Rect toggle_all_button{button_x + button_width + button_gap, button_y, button_width, 50};
     hovered_button = ButtonId::None;
@@ -733,7 +740,7 @@ bool review_candidates(std::vector<Candidate>& candidates) {
                        ease_out(focus_pulse) * content_alpha, ease_out(badge_pulse) * content_alpha);
     }
 
-    const Rect progress{layout.action.x + 18, layout.action.y + layout.action.h - 16, layout.action.w - 36, 6};
+    const Rect progress{layout.action.x + 18, layout.action.y + 12, layout.action.w - 36, 6};
     render_action_area(renderer, layout.action, delete_button, toggle_all_button, candidates[selected_index].review_action,
                        hovered_button, pressed_button, action_alpha);
     render_progress(renderer, selected_index, candidates.size(), progress);
