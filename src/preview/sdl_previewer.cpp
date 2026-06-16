@@ -10,20 +10,6 @@
 
 namespace trimanga {
 
-namespace {
-
-void drain_destroy_events() {
-  for (int frame = 0; frame < 12; ++frame) {
-    SDL_Event event;
-    while (SDL_PollEvent(&event) != 0) {
-    }
-    SDL_PumpEvents();
-    SDL_Delay(1);
-  }
-}
-
-}  // namespace
-
 bool review_candidates(std::vector<Candidate>& candidates) {
   using namespace preview;
 
@@ -108,6 +94,10 @@ bool review_candidates(std::vector<Candidate>& candidates) {
       return;
     }
     window_closed = true;
+    if (window != nullptr) {
+      order_out_native_window(window);
+      drain_native_window_events();
+    }
     cache.clear();
     if (renderer != nullptr) {
       SDL_DestroyRenderer(renderer);
@@ -117,7 +107,7 @@ bool review_candidates(std::vector<Candidate>& candidates) {
       SDL_DestroyWindow(window);
       window = nullptr;
     }
-    drain_destroy_events();
+    drain_native_window_events();
     SDL_QuitSubSystem(SDL_INIT_VIDEO);
     SDL_Quit();
   };

@@ -17,11 +17,18 @@ set(TRIMANGA_PREVIEW_SOURCE src/preview/previewer_stub.cpp)
 if(TRIMANGA_WITH_SDL)
   find_package(SDL2 QUIET)
   if(SDL2_FOUND)
+    if(APPLE)
+      enable_language(OBJCXX)
+      set(TRIMANGA_PREVIEW_PLATFORM_SOURCE src/preview/sdl/platform_window_mac.mm)
+    else()
+      set(TRIMANGA_PREVIEW_PLATFORM_SOURCE src/preview/sdl/platform_window.cpp)
+    endif()
     set(TRIMANGA_PREVIEW_SOURCE
       src/preview/sdl_previewer.cpp
       src/preview/sdl/drawing.cpp
       src/preview/sdl/layout.cpp
       src/preview/sdl/page_card.cpp
+      ${TRIMANGA_PREVIEW_PLATFORM_SOURCE}
       src/preview/sdl/texture_cache.cpp
       src/preview/sdl/widgets.cpp
     )
@@ -50,6 +57,9 @@ if(TRIMANGA_WITH_SDL AND SDL2_FOUND)
   target_compile_definitions(trimanga PRIVATE TRIMANGA_WITH_SDL=1)
   target_include_directories(trimanga PRIVATE ${SDL2_INCLUDE_DIRS})
   target_link_libraries(trimanga PRIVATE ${SDL2_LIBRARIES})
+  if(APPLE)
+    target_link_libraries(trimanga PRIVATE "-framework AppKit")
+  endif()
 endif()
 
 if(MSVC)

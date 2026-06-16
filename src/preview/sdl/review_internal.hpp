@@ -115,5 +115,7 @@ void render_action_area(SDL_Renderer* renderer, const Rect& action, const Rect& 
                         ButtonId pressed, double alpha);
 void render_footer(SDL_Renderer* renderer, const Rect& footer);
 void update_logical_render_size(SDL_Window* window, SDL_Renderer* renderer, int& window_width, int& window_height);
+void order_out_native_window(SDL_Window* window);
+void drain_native_window_events();
 
 }  // namespace trimanga::preview

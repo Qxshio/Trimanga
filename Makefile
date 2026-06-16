@@ -8,6 +8,13 @@ SDL_CFLAGS := $(shell sdl2-config --cflags 2>/dev/null)
 SDL_LIBS := $(shell sdl2-config --libs 2>/dev/null)
 SDL_PREFIX := $(shell sdl2-config --prefix 2>/dev/null)
 SDL_DYLIB := $(firstword $(wildcard $(SDL_PREFIX)/lib/libSDL2-2.0.0.dylib) $(wildcard $(SDL_PREFIX)/lib/libSDL2.dylib))
+ifeq ($(UNAME_S),Darwin)
+PREVIEW_PLATFORM_SOURCE := src/preview/sdl/platform_window_mac.mm
+PREVIEW_PLATFORM_LDFLAGS := -framework AppKit
+else
+PREVIEW_PLATFORM_SOURCE := src/preview/sdl/platform_window.cpp
+PREVIEW_PLATFORM_LDFLAGS :=
+endif
 ifeq ($(strip $(SDL_LIBS)),)
 PREVIEW_SOURCE := src/preview/previewer_stub.cpp
 PREVIEW_CXXFLAGS :=
@@ -18,10 +25,11 @@ PREVIEW_SOURCE := \
 	src/preview/sdl/drawing.cpp \
 	src/preview/sdl/layout.cpp \
 	src/preview/sdl/page_card.cpp \
+	$(PREVIEW_PLATFORM_SOURCE) \
 	src/preview/sdl/texture_cache.cpp \
 	src/preview/sdl/widgets.cpp
 PREVIEW_CXXFLAGS := $(SDL_CFLAGS) -DTRIMANGA_WITH_SDL=1
-PREVIEW_LDFLAGS := $(SDL_LIBS)
+PREVIEW_LDFLAGS := $(SDL_LIBS) $(PREVIEW_PLATFORM_LDFLAGS)
 endif
 
 CFLAGS ?= -Wall -Wextra -Ithird_party/miniz
