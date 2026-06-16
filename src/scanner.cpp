@@ -500,7 +500,7 @@ int worker_count_for(ScanSpeed speed, std::size_t page_count) {
       requested = static_cast<int>(hardware * 2U);
       break;
     case ScanSpeed::Fastest:
-      requested = static_cast<int>(page_count);
+      requested = static_cast<int>(std::min<unsigned int>(hardware * 4U, 64U));
       break;
   }
   return std::min<int>(std::max(1, requested), static_cast<int>(page_count));

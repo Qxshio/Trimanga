@@ -10,6 +10,10 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
+if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
+  set(CMAKE_BUILD_TYPE Release CACHE STRING "Build type" FORCE)
+endif()
+
 option(TRIMANGA_WARNINGS_AS_ERRORS "Treat compiler warnings as errors" OFF)
 option(TRIMANGA_WITH_SDL "Build the interactive SDL2 previewer when SDL2 is available" ON)
 

@@ -27,8 +27,9 @@ PREVIEW_HELPER_SOURCES := \
 PREVIEW_TARGETS := $(PREVIEW_TARGET)
 endif
 
-CFLAGS ?= -Wall -Wextra -Ithird_party/miniz
-CXXFLAGS ?= -std=c++20 -Wall -Wextra -Wpedantic -Iinclude -Ithird_party/stb -Ithird_party/miniz
+OPTFLAGS ?= -O3 -DNDEBUG
+CFLAGS ?= $(OPTFLAGS) -Wall -Wextra -Ithird_party/miniz
+CXXFLAGS ?= $(OPTFLAGS) -std=c++20 -Wall -Wextra -Wpedantic -Iinclude -Ithird_party/stb -Ithird_party/miniz
 PREVIEW_CXXFLAGS ?= $(CXXFLAGS) $(SDL_CFLAGS) -DTRIMANGA_WITH_SDL=1
 LDFLAGS ?=
 PREVIEW_LDFLAGS ?= $(SDL_LIBS)
@@ -74,14 +75,6 @@ ifneq ($(strip $(SDL_DYLIB)),)
 endif
 endif
 
-$(BUILD_DIR)/%.cpp.o: src/%.cpp
-	@mkdir -p $(dir $@)
-	$(CXX) $(CXXFLAGS) -c $< -o $@
-
-$(BUILD_DIR)/%.mm.o: src/%.mm
-	@mkdir -p $(dir $@)
-	$(CXX) $(CXXFLAGS) -x objective-c++ -c $< -o $@
-
 $(BUILD_DIR)/preview/sdl_preview_main.cpp.o: src/preview/sdl_preview_main.cpp
 	@mkdir -p $(dir $@)
 	$(CXX) $(PREVIEW_CXXFLAGS) -c $< -o $@
@@ -93,6 +86,14 @@ $(BUILD_DIR)/preview/sdl_previewer.cpp.o: src/preview/sdl_previewer.cpp
 $(BUILD_DIR)/preview/sdl/%.cpp.o: src/preview/sdl/%.cpp
 	@mkdir -p $(dir $@)
 	$(CXX) $(PREVIEW_CXXFLAGS) -c $< -o $@
+
+$(BUILD_DIR)/%.cpp.o: src/%.cpp
+	@mkdir -p $(dir $@)
+	$(CXX) $(CXXFLAGS) -c $< -o $@
+
+$(BUILD_DIR)/%.mm.o: src/%.mm
+	@mkdir -p $(dir $@)
+	$(CXX) $(CXXFLAGS) -x objective-c++ -c $< -o $@
 
 $(BUILD_DIR)/third_party/%.c.o: third_party/%.c
 	@mkdir -p $(dir $@)
