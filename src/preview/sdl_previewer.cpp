@@ -443,7 +443,7 @@ void render_page_card(SDL_Renderer* renderer, TextureCache& cache, std::vector<C
   const int shake_x = static_cast<int>(std::sin(shake * 92.0 + index * 1.7) * shake);
   const int shake_y = static_cast<int>(std::cos(shake * 79.0 + index * 2.1) * shake * 0.55);
   const int base_top = content.y + (content.h - card_height) / 2 + static_cast<int>(distance * 18);
-  const int peek_height = std::clamp(static_cast<int>(card_height * (selected ? 0.16 : 0.14)), 42, 82);
+  const int peek_height = std::clamp(static_cast<int>(card_height * (selected ? 0.24 : 0.20)), 64, 118);
   const int deleted_top = content.y + content.h - peek_height;
   const int delete_drop = static_cast<int>(std::round(delete_slide * std::max(0, deleted_top - base_top)));
   const int center_x = content.x + content.w / 2 + static_cast<int>(offset * std::min(390, content.w / 3)) + shake_x;
@@ -704,7 +704,7 @@ bool review_candidates(std::vector<Candidate>& candidates) {
   bool escape_held = false;
   double escape_hold_time = 0.0;
   bool confirming = false;
-  bool window_hidden = false;
+  bool window_closed = false;
   double confirm_time = 0.0;
   std::vector<double> delete_slides(candidates.size(), 0.0);
   TextureCache cache(renderer, candidates);
@@ -744,14 +744,20 @@ bool review_candidates(std::vector<Candidate>& candidates) {
     SDL_SetWindowTitle(window, "Review Detected Scanlations - confirming selection");
   };
   auto close_preview_now = [&] {
-    if (!window_hidden) {
-      SDL_HideWindow(window);
-      window_hidden = true;
-      SDL_PumpEvents();
+    if (window_closed) {
+      return;
     }
+    window_closed = true;
     cache.clear();
-    SDL_DestroyRenderer(renderer);
-    SDL_DestroyWindow(window);
+    if (renderer != nullptr) {
+      SDL_DestroyRenderer(renderer);
+      renderer = nullptr;
+    }
+    if (window != nullptr) {
+      SDL_DestroyWindow(window);
+      window = nullptr;
+    }
+    SDL_PumpEvents();
     SDL_Quit();
   };
 
@@ -967,13 +973,7 @@ bool review_candidates(std::vector<Candidate>& candidates) {
     SDL_RenderPresent(renderer);
   }
 
-  if (!window_hidden) {
-    SDL_HideWindow(window);
-  }
-  cache.clear();
-  SDL_DestroyRenderer(renderer);
-  SDL_DestroyWindow(window);
-  SDL_Quit();
+  close_preview_now();
   return true;
 }
 
