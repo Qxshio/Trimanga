@@ -22,6 +22,7 @@ void print_help() {
       << "                                  Scan speed. Default: balanced\n"
       << "  --format <table|json>          Output format. Default: table\n"
       << "  --review-dir <path>            Copy suspicious pages into this folder\n"
+      << "  --preview                      Open an image review window for Keep/Delete decisions\n"
       << "  --details                      Include detector signals in table output\n"
       << "  --timings                      Print phase timings after the scan\n"
       << "  --progress                     Show live progress while scanning\n"
@@ -32,6 +33,7 @@ void print_help() {
       << "  --version                      Show version\n\n"
       << "Examples:\n"
       << "  trimanga scan ~/Documents/Mangas/Volume.cbz --review-dir /tmp/review\n"
+      << "  trimanga scan ./MangaFolder --preview\n"
       << "  trimanga scan ./MangaFolder --speed fastest --format json\n";
 }
 
@@ -102,6 +104,8 @@ int main(int argc, char** argv) {
         options.format = parse_format(require_value(index, argc, argv, arg));
       } else if (arg == "--review-dir") {
         options.review_dir = fs::path(require_value(index, argc, argv, arg));
+      } else if (arg == "--preview") {
+        options.preview = true;
       } else if (arg == "--details") {
         options.details = true;
       } else if (arg == "--timings") {

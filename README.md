@@ -1,6 +1,6 @@
 # Trimanga
 
-Trimanga is a command-line tool for cleaning manga archives. It scans folders, images, `.zip`, and `.cbz` files for likely scanlation credits, recruitment pages, support ads and repeated release clutter, then gives you a reviewable set of pages. Trimanga will never alter any of the provided files, only offer suggestions.
+Trimanga is a command-line tool for cleaning manga archives. It scans folders, images, `.zip`, and `.cbz` files for likely scanlation credits, recruitment pages, support ads and repeated release clutter, then gives you a reviewable set of pages. By default it only offers suggestions; interactive review can safely move deleted folder pages into `.trimanga-trash`.
 
 It is built for people who care about clean, portable manga libraries: fewer interruption pages, smaller archives, better reader navigation.
 
@@ -50,6 +50,7 @@ Supported image types:
 - Built-in cross-platform detector with no external recognition runtime.
 - Parallel page analysis for faster scans.
 - Conservative classifier tuned for review-first workflows.
+- Optional graphical review window with Keep/Delete decisions.
 - JSON output for automation.
 
 ## Requirements
@@ -59,10 +60,11 @@ Supported image types:
 - Apple Clang or Xcode Command Line Tools
 - CMake 3.22+ recommended
 - `unzip` or `7z` for archive extraction
+- SDL2, optional, for the graphical previewer
 
 ```sh
 xcode-select --install
-brew install cmake unzip
+brew install cmake unzip sdl2
 ```
 
 ### Linux
@@ -70,18 +72,19 @@ brew install cmake unzip
 - CMake 3.22+
 - C++20 compiler such as GCC 11+ or Clang 14+
 - `unzip` or `7z`
+- SDL2 development headers, optional, for the graphical previewer
 
 Debian/Ubuntu:
 
 ```sh
 sudo apt-get update
-sudo apt-get install -y cmake g++ unzip
+sudo apt-get install -y cmake g++ unzip libsdl2-dev
 ```
 
 Fedora:
 
 ```sh
-sudo dnf install cmake gcc-c++ unzip
+sudo dnf install cmake gcc-c++ unzip SDL2-devel
 ```
 
 ### Windows
@@ -135,6 +138,12 @@ trimanga scan "./I Hear the Sunspot" \
   --review-dir /tmp/sunspot-review
 ```
 
+Scan and review candidate pages in a native window:
+
+```sh
+trimanga scan "./I Hear the Sunspot" --preview
+```
+
 Output JSON for scripts:
 
 ```sh
@@ -148,6 +157,7 @@ Options:
                              Scan speed. Default: balanced
 --format table|json          Output format. Default: table
 --review-dir PATH            Copy suspicious pages into this folder
+--preview                    Open an image review window for Keep/Delete decisions
 --details                    Include detector signals in table output
 --timings                    Print phase timings after the scan
 --progress                   Show live progress while scanning
@@ -159,6 +169,7 @@ Options:
 The default table output is intentionally compact. Use `--details` when you want to inspect the detector signals that caused each page to be flagged.
 Use `--timings` to see where time is spent across extraction, page profiling, page analysis, visual matching and review export.
 Use `--progress` or `--verbose` when you want live scan feedback.
+Use `--preview` when you want to inspect every candidate image immediately. Mouse wheel or arrow keys move between pages, `K` keeps a page, `D` marks it for deletion, and the on-screen buttons can be clicked. Folder and single-image inputs move deleted files into `.trimanga-trash`. Archive inputs are reviewed without modifying the archive.
 
 Speed controls how aggressively Trimanga creates workers:
 
@@ -187,7 +198,7 @@ Expected package formats:
 
 ## Safety Model
 
-Trimanga does not delete pages by default. It identifies pages that deserve attention and can copy them to a review folder. This keeps the cleanup workflow auditable and avoids destructive surprises.
+Trimanga does not delete pages by default. It identifies pages that deserve attention and can copy them to a review folder. With `--preview`, folder and single-image inputs move pages marked Delete into a local `.trimanga-trash` folder. `.cbz` and `.zip` inputs are not rewritten by the previewer, so review decisions are reported but the archive remains unchanged.
 
 The classifier is tuned around three principles:
 

@@ -4,6 +4,7 @@
 #include "trimanga/file_utils.hpp"
 #include "trimanga/image_features.hpp"
 #include "trimanga/detector.hpp"
+#include "trimanga/previewer.hpp"
 
 #include <algorithm>
 #include <atomic>
@@ -272,6 +273,60 @@ void write_review_folder(const std::vector<Candidate>& candidates, const fs::pat
   }
 }
 
+fs::path unique_destination(const fs::path& path) {
+  if (!fs::exists(path)) {
+    return path;
+  }
+  const fs::path parent = path.parent_path();
+  const std::string stem = path.stem().string();
+  const std::string extension = path.extension().string();
+  for (int index = 1; index < 10000; ++index) {
+    fs::path candidate = parent / (stem + "-" + std::to_string(index) + extension);
+    if (!fs::exists(candidate)) {
+      return candidate;
+    }
+  }
+  throw std::runtime_error("could not choose a unique trash filename for: " + path.string());
+}
+
+fs::path review_trash_root(const fs::path& input) {
+  if (fs::is_directory(input)) {
+    return input / ".trimanga-trash";
+  }
+  return input.parent_path() / ".trimanga-trash";
+}
+
+void apply_review_actions(ScanResult& result, const fs::path& input) {
+  for (const Candidate& candidate : result.candidates) {
+    if (candidate.review_action == ReviewAction::Keep) {
+      ++result.marked_keep;
+    } else if (candidate.review_action == ReviewAction::Delete) {
+      ++result.marked_delete;
+    }
+  }
+
+  if (result.archive_input || result.marked_delete == 0) {
+    return;
+  }
+
+  const fs::path trash_root = review_trash_root(input);
+  std::error_code ignored;
+  fs::create_directories(trash_root, ignored);
+  for (const Candidate& candidate : result.candidates) {
+    if (candidate.review_action != ReviewAction::Delete || !fs::exists(candidate.page.image_path)) {
+      continue;
+    }
+    fs::path destination = unique_destination(trash_root / candidate.page.image_path.filename());
+    std::error_code rename_error;
+    fs::rename(candidate.page.image_path, destination, rename_error);
+    if (rename_error) {
+      copy_file_create_dirs(candidate.page.image_path, destination);
+      fs::remove(candidate.page.image_path, ignored);
+    }
+    ++result.deleted_files;
+  }
+}
+
 std::string bar(double fraction, int width = 18) {
   fraction = std::clamp(fraction, 0.0, 1.0);
   const int filled = static_cast<int>(fraction * width + 0.5);
@@ -422,6 +477,18 @@ std::string speed_name(ScanSpeed speed) {
   return "balanced";
 }
 
+std::string review_action_name(ReviewAction action) {
+  switch (action) {
+    case ReviewAction::Keep:
+      return "keep";
+    case ReviewAction::Delete:
+      return "delete";
+    case ReviewAction::Undecided:
+      return "undecided";
+  }
+  return "undecided";
+}
+
 int worker_count_for(ScanSpeed speed, std::size_t page_count) {
   if (page_count == 0) {
     return 1;
@@ -483,6 +550,7 @@ ScanResult scan(const fs::path& input, const ScanOptions& options) {
   result.scanned_pages = pages.size();
   result.details = options.details;
   result.timings = options.timings;
+  result.archive_input = fs::is_regular_file(input) && is_cbz_path(input);
   result.prepare_time = prepared_at - started_at;
 
   std::vector<std::string> page_texts(pages.size());
@@ -572,9 +640,15 @@ ScanResult scan(const fs::path& input, const ScanOptions& options) {
     return left.page.order < right.page.order;
   });
 
+  if (options.preview && !result.candidates.empty()) {
+    result.previewed = review_candidates(result.candidates);
+  }
   if (options.review_dir.has_value()) {
     write_review_folder(result.candidates, *options.review_dir);
     result.copied_review_pages = true;
+  }
+  if (result.previewed) {
+    apply_review_actions(result, input);
   }
   const auto finished_at = std::chrono::steady_clock::now();
   result.review_copy_time = finished_at - visual_matched_at;
@@ -588,6 +662,15 @@ void print_result_table(const ScanResult& result) {
   std::cout << "Detector: " << result.detector << "\n";
   std::cout << "Pages scanned: " << result.scanned_pages << "\n";
   std::cout << "Pages recommended for review: " << result.candidates.size() << "\n\n";
+  if (result.previewed) {
+    std::cout << "Preview decisions: " << result.marked_keep << " kept, " << result.marked_delete << " marked delete";
+    if (result.archive_input && result.marked_delete > 0) {
+      std::cout << " (archive was not modified)";
+    } else if (result.deleted_files > 0) {
+      std::cout << " (" << result.deleted_files << " moved to .trimanga-trash)";
+    }
+    std::cout << "\n\n";
+  }
 
   if (result.timings) {
     std::cout << "Timings\n";
@@ -607,14 +690,20 @@ void print_result_table(const ScanResult& result) {
     return;
   }
 
-  std::cout << std::left << std::setw(8) << "Page" << std::setw(10) << "Score" << std::setw(10) << "Reason"
-            << "File\n";
+  std::cout << std::left << std::setw(8) << "Page" << std::setw(10) << "Score" << std::setw(10) << "Reason";
+  if (result.previewed) {
+    std::cout << std::setw(12) << "Decision";
+  }
+  std::cout << "File\n";
   std::cout << std::string(72, '-') << "\n";
   for (const Candidate& candidate : result.candidates) {
     std::string reason = candidate.visual_match ? "repeat" : "signal";
     std::cout << std::left << std::setw(8) << candidate.page.order << std::setw(10) << std::fixed
-              << std::setprecision(1) << candidate.classification.score << std::setw(10) << reason
-              << candidate.page.archive_name << "\n";
+              << std::setprecision(1) << candidate.classification.score << std::setw(10) << reason;
+    if (result.previewed) {
+      std::cout << std::setw(12) << review_action_name(candidate.review_action);
+    }
+    std::cout << candidate.page.archive_name << "\n";
     if (result.details && !candidate.text_excerpt.empty()) {
       std::cout << "          " << candidate.text_excerpt << "\n";
     }
@@ -630,6 +719,11 @@ void print_result_json(const ScanResult& result) {
   std::cout << "  \"detector\": \"" << escape_json(result.detector) << "\",\n";
   std::cout << "  \"detector_version\": \"" << escape_json(result.detector_version) << "\",\n";
   std::cout << "  \"scanned_pages\": " << result.scanned_pages << ",\n";
+  std::cout << "  \"previewed\": " << (result.previewed ? "true" : "false") << ",\n";
+  std::cout << "  \"marked_keep\": " << result.marked_keep << ",\n";
+  std::cout << "  \"marked_delete\": " << result.marked_delete << ",\n";
+  std::cout << "  \"deleted_files\": " << result.deleted_files << ",\n";
+  std::cout << "  \"archive_input\": " << (result.archive_input ? "true" : "false") << ",\n";
   std::cout << "  \"candidates\": [\n";
   for (std::size_t index = 0; index < result.candidates.size(); ++index) {
     const Candidate& candidate = result.candidates[index];
@@ -640,6 +734,7 @@ void print_result_json(const ScanResult& result) {
     std::cout << "      \"indicator\": " << candidate.classification.indicator << ",\n";
     std::cout << "      \"story_confidence\": " << std::fixed << std::setprecision(3) << candidate.classification.story << ",\n";
     std::cout << "      \"outlier_distance\": " << std::fixed << std::setprecision(3) << candidate.classification.outlier << ",\n";
+    std::cout << "      \"review_action\": \"" << review_action_name(candidate.review_action) << "\",\n";
     std::cout << "      \"visual_match\": " << (candidate.visual_match ? "true" : "false") << ",\n";
     std::cout << "      \"visual_distance\": " << candidate.visual_distance << ",\n";
     std::cout << "      \"excerpt\": \"" << escape_json(candidate.text_excerpt) << "\"\n";

@@ -57,12 +57,19 @@ struct Classification {
   int indicator = 0;
 };
 
+enum class ReviewAction {
+  Undecided,
+  Keep,
+  Delete,
+};
+
 struct Candidate {
   PageRef page;
   Classification classification;
   std::string text_excerpt;
   bool visual_match = false;
   int visual_distance = 0;
+  ReviewAction review_action = ReviewAction::Undecided;
 };
 
 enum class OutputFormat {
@@ -86,6 +93,7 @@ struct ScanOptions {
   bool timings = false;
   bool progress = false;
   bool verbose = false;
+  bool preview = false;
 };
 
 struct ScanResult {
@@ -96,6 +104,11 @@ struct ScanResult {
   bool details = false;
   bool timings = false;
   bool copied_review_pages = false;
+  bool previewed = false;
+  bool archive_input = false;
+  std::size_t marked_keep = 0;
+  std::size_t marked_delete = 0;
+  std::size_t deleted_files = 0;
   std::chrono::duration<double> prepare_time{};
   std::chrono::duration<double> profile_time{};
   std::chrono::duration<double> analysis_time{};

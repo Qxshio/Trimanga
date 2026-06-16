@@ -16,3 +16,4 @@
 - Made scans quiet by default, with `--progress` and `--verbose` for live feedback.
 - Replaced raw worker counts with `--speed eco|balanced|fast|fastest`.
 - Added `--timings` for scan phase benchmarks.
+- Added optional SDL2 graphical preview with Keep/Delete review decisions.

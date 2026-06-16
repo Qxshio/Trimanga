@@ -38,6 +38,37 @@ GrayImage load_grayscale_image(const std::filesystem::path& image_path) {
   return image;
 }
 
+ColorImage load_color_image(const std::filesystem::path& image_path) {
+  int width = 0;
+  int height = 0;
+  int channels = 0;
+  unsigned char* data = stbi_load(image_path.string().c_str(), &width, &height, &channels, 4);
+  if (data == nullptr || width <= 0 || height <= 0) {
+    if (data != nullptr) {
+      stbi_image_free(data);
+    }
+    return {};
+  }
+
+  ColorImage image;
+  image.width = width;
+  image.height = height;
+  image.pixels.resize(static_cast<std::size_t>(width * height));
+  for (int y = 0; y < height; ++y) {
+    for (int x = 0; x < width; ++x) {
+      const int offset = (y * width + x) * 4;
+      const std::uint32_t red = data[offset];
+      const std::uint32_t green = data[offset + 1];
+      const std::uint32_t blue = data[offset + 2];
+      const std::uint32_t alpha = data[offset + 3];
+      image.pixels[static_cast<std::size_t>(y * width + x)] =
+          (alpha << 24U) | (red << 16U) | (green << 8U) | blue;
+    }
+  }
+  stbi_image_free(data);
+  return image;
+}
+
 GrayImage resize_grayscale(const GrayImage& image, int width, int height) {
   if (!image.valid() || width <= 0 || height <= 0) {
     return {};

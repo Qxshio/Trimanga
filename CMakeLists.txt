@@ -11,6 +11,15 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
 option(TRIMANGA_WARNINGS_AS_ERRORS "Treat compiler warnings as errors" OFF)
+option(TRIMANGA_WITH_SDL "Build the interactive SDL2 previewer when SDL2 is available" ON)
+
+set(TRIMANGA_PREVIEW_SOURCE src/preview/previewer_stub.cpp)
+if(TRIMANGA_WITH_SDL)
+  find_package(SDL2 QUIET)
+  if(SDL2_FOUND)
+    set(TRIMANGA_PREVIEW_SOURCE src/preview/sdl_previewer.cpp)
+  endif()
+endif()
 
 add_executable(trimanga
   src/main.cpp
@@ -21,9 +30,16 @@ add_executable(trimanga
   src/process.cpp
   src/scanner.cpp
   src/detectors/scanlation_detector.cpp
+  ${TRIMANGA_PREVIEW_SOURCE}
 )
 
 target_include_directories(trimanga PRIVATE include third_party/stb)
+
+if(TRIMANGA_WITH_SDL AND SDL2_FOUND)
+  target_compile_definitions(trimanga PRIVATE TRIMANGA_WITH_SDL=1)
+  target_include_directories(trimanga PRIVATE ${SDL2_INCLUDE_DIRS})
+  target_link_libraries(trimanga PRIVATE ${SDL2_LIBRARIES})
+endif()
 
 if(MSVC)
   target_compile_options(trimanga PRIVATE /W4)
