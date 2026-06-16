@@ -10,6 +10,7 @@
 #include <random>
 #include <stdexcept>
 #include <string>
+#include <unordered_set>
 
 namespace fs = std::filesystem;
 
@@ -213,13 +214,98 @@ std::vector<fs::path> extract_cbz(const fs::path& cbz, const fs::path& destinati
   return images;
 }
 
+void replace_archive_file(const fs::path& temp_archive, const fs::path& archive_path) {
+  std::error_code ignored;
+  fs::path backup = archive_path;
+  backup += ".trimanga-bak";
+  fs::remove(backup, ignored);
+  fs::rename(archive_path, backup);
+  try {
+    fs::rename(temp_archive, archive_path);
+  } catch (...) {
+    fs::rename(backup, archive_path, ignored);
+    fs::remove(temp_archive, ignored);
+    throw;
+  }
+  fs::remove(backup, ignored);
+}
+
+fs::path temp_archive_path_for(const fs::path& archive_path) {
+  fs::path temp_archive = archive_path;
+  temp_archive += ".trimanga-tmp.zip";
+  return temp_archive;
+}
+
+void remove_archive_entries(const fs::path& archive_path, const std::unordered_set<std::string>& removed_entries) {
+  if (removed_entries.empty()) {
+    return;
+  }
+
+  fs::path temp_archive = temp_archive_path_for(archive_path);
+  std::error_code ignored;
+  fs::remove(temp_archive, ignored);
+
+  mz_zip_archive source{};
+  if (!mz_zip_reader_init_file(&source, archive_path.string().c_str(), 0)) {
+    throw std::runtime_error(zip_error_message("failed to open archive", source));
+  }
+
+  mz_zip_archive destination{};
+  if (!mz_zip_writer_init_file(&destination, temp_archive.string().c_str(), 0)) {
+    const std::string message = zip_error_message("failed to create archive", destination);
+    mz_zip_reader_end(&source);
+    throw std::runtime_error(message);
+  }
+
+  const mz_uint file_count = mz_zip_reader_get_num_files(&source);
+  for (mz_uint index = 0; index < file_count; ++index) {
+    mz_zip_archive_file_stat stat{};
+    if (!mz_zip_reader_file_stat(&source, index, &stat)) {
+      const std::string message = zip_error_message("failed to read archive entry", source);
+      mz_zip_writer_end(&destination);
+      mz_zip_reader_end(&source);
+      fs::remove(temp_archive, ignored);
+      throw std::runtime_error(message);
+    }
+
+    const std::string archive_name = stat.m_filename;
+    if (!is_safe_archive_name(archive_name)) {
+      mz_zip_writer_end(&destination);
+      mz_zip_reader_end(&source);
+      fs::remove(temp_archive, ignored);
+      throw std::runtime_error("archive contains an unsafe path: " + archive_name);
+    }
+    if (removed_entries.contains(archive_name)) {
+      continue;
+    }
+
+    if (!mz_zip_writer_add_from_zip_reader(&destination, &source, index)) {
+      const std::string message = zip_error_message("failed to copy archive entry", destination);
+      mz_zip_writer_end(&destination);
+      mz_zip_reader_end(&source);
+      fs::remove(temp_archive, ignored);
+      throw std::runtime_error(message);
+    }
+  }
+
+  if (!mz_zip_writer_finalize_archive(&destination)) {
+    const std::string message = zip_error_message("failed to finalize archive", destination);
+    mz_zip_writer_end(&destination);
+    mz_zip_reader_end(&source);
+    fs::remove(temp_archive, ignored);
+    throw std::runtime_error(message);
+  }
+  mz_zip_writer_end(&destination);
+  mz_zip_reader_end(&source);
+  replace_archive_file(temp_archive, archive_path);
+}
+
 void replace_archive_from_directory(const fs::path& source_dir, const fs::path& archive_path) {
   if (!fs::is_directory(source_dir)) {
     throw std::runtime_error("archive rebuild source is not a directory: " + source_dir.string());
   }
 
-  fs::path temp_archive = archive_path;
-  temp_archive += ".trimanga-tmp.zip";
+  fs::path temp_archive = temp_archive_path_for(archive_path);
   std::error_code ignored;
   fs::remove(temp_archive, ignored);
 
@@ -230,8 +316,7 @@ void replace_archive_from_directory(const fs::path& source_dir, const fs::path& 
 
   for (const fs::path& file : archive_files_recursive(source_dir)) {
     const std::string archive_name = fs::relative(file, source_dir).generic_string();
-    if (!mz_zip_writer_add_file(&archive, archive_name.c_str(), file.string().c_str(), nullptr, 0,
-                                MZ_BEST_SPEED)) {
+    if (!mz_zip_writer_add_file(&archive, archive_name.c_str(), file.string().c_str(), nullptr, 0, MZ_BEST_SPEED)) {
       const std::string message = zip_error_message("failed to add archive entry", archive);
       mz_zip_writer_end(&archive);
       fs::remove(temp_archive, ignored);
@@ -246,19 +331,7 @@ void replace_archive_from_directory(const fs::path& source_dir, const fs::path& 
     throw std::runtime_error(message);
   }
   mz_zip_writer_end(&archive);
-
-  fs::path backup = archive_path;
-  backup += ".trimanga-bak";
-  fs::remove(backup, ignored);
-  fs::rename(archive_path, backup);
-  try {
-    fs::rename(temp_archive, archive_path);
-  } catch (...) {
-    fs::rename(backup, archive_path, ignored);
-    fs::remove(temp_archive, ignored);
-    throw;
-  }
-  fs::remove(backup, ignored);
+  replace_archive_file(temp_archive, archive_path);
 }
 
 std::string path_label(const fs::path& path) {

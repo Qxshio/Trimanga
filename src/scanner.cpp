@@ -331,18 +331,20 @@ void apply_review_actions(ScanResult& result, const fs::path& input, const fs::p
     }
     std::error_code ignored;
     std::unordered_set<std::string> removed_paths;
+    std::unordered_set<std::string> removed_entries;
     for (const Candidate& candidate : result.candidates) {
-      if (candidate.review_action != ReviewAction::Delete || !fs::exists(candidate.page.image_path)) {
+      if (candidate.review_action != ReviewAction::Delete) {
         continue;
       }
-      if (!removed_paths.insert(candidate.page.image_path.string()).second) {
+      if (!removed_entries.insert(candidate.page.archive_name).second) {
         continue;
       }
-      if (fs::remove(candidate.page.image_path, ignored)) {
-        ++result.deleted_files;
+      if (fs::exists(candidate.page.image_path) && removed_paths.insert(candidate.page.image_path.string()).second) {
+        fs::remove(candidate.page.image_path, ignored);
       }
     }
-    replace_archive_from_directory(archive_root, input);
+    remove_archive_entries(input, removed_entries);
+    result.deleted_files = removed_entries.size();
     return;
   }
 
