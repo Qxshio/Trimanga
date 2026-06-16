@@ -3,14 +3,71 @@
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
 
+#if defined(TRIMANGA_WITH_TURBOJPEG)
+#include <turbojpeg.h>
+#endif
+
 #include <algorithm>
+#include <array>
 #include <cmath>
+#include <cstdio>
 #include <limits>
 #include <vector>
 
 namespace trimanga {
 
 namespace {
+
+#if defined(TRIMANGA_WITH_TURBOJPEG)
+bool looks_like_jpeg(const std::uint8_t* data, std::size_t size) {
+  return data != nullptr && size >= 3 && data[0] == 0xFF && data[1] == 0xD8 && data[2] == 0xFF;
+}
+
+struct TurboJpegHandle {
+  TurboJpegHandle() : handle(tj3Init(TJINIT_DECOMPRESS)) {
+    if (handle != nullptr) {
+      tj3Set(handle, TJPARAM_FASTDCT, 1);
+      tj3Set(handle, TJPARAM_FASTUPSAMPLE, 1);
+    }
+  }
+
+  TurboJpegHandle(const TurboJpegHandle&) = delete;
+  TurboJpegHandle& operator=(const TurboJpegHandle&) = delete;
+
+  ~TurboJpegHandle() {
+    tj3Destroy(handle);
+  }
+
+  tjhandle handle = nullptr;
+};
+
+GrayImage load_jpeg_grayscale_turbojpeg(const std::uint8_t* data, std::size_t size) {
+  if (!looks_like_jpeg(data, size)) {
+    return {};
+  }
+  thread_local TurboJpegHandle turbojpeg;
+  tjhandle handle = turbojpeg.handle;
+  if (handle == nullptr) {
+    return {};
+  }
+  GrayImage image;
+  if (tj3DecompressHeader(handle, data, size) != 0) {
+    return {};
+  }
+  const int width = tj3Get(handle, TJPARAM_JPEGWIDTH);
+  const int height = tj3Get(handle, TJPARAM_JPEGHEIGHT);
+  if (width <= 0 || height <= 0) {
+    return {};
+  }
+  image.width = width;
+  image.height = height;
+  image.pixels.resize(static_cast<std::size_t>(width * height));
+  if (tj3Decompress8(handle, data, size, image.pixels.data(), 0, TJPF_GRAY) != 0) {
+    return {};
+  }
+  return image;
+}
+#endif
 
 GrayImage grayscale_from_stbi(unsigned char* data, int width, int height, int channels) {
   if (data == nullptr || width <= 0 || height <= 0 || channels <= 0) {
@@ -41,6 +98,36 @@ GrayImage grayscale_from_stbi(unsigned char* data, int width, int height, int ch
 }  // namespace
 
 GrayImage load_grayscale_image(const std::filesystem::path& image_path) {
+#if defined(TRIMANGA_WITH_TURBOJPEG)
+  {
+    FILE* file = std::fopen(image_path.string().c_str(), "rb");
+    if (file != nullptr) {
+      std::array<std::uint8_t, 3> header{};
+      const std::size_t read = std::fread(header.data(), 1, header.size(), file);
+      std::fclose(file);
+      if (read == header.size() && looks_like_jpeg(header.data(), header.size())) {
+        std::vector<std::uint8_t> bytes;
+        FILE* jpeg_file = std::fopen(image_path.string().c_str(), "rb");
+        if (jpeg_file != nullptr) {
+          std::fseek(jpeg_file, 0, SEEK_END);
+          const long size = std::ftell(jpeg_file);
+          std::rewind(jpeg_file);
+          if (size > 0 && size <= std::numeric_limits<int>::max()) {
+            bytes.resize(static_cast<std::size_t>(size));
+            if (std::fread(bytes.data(), 1, bytes.size(), jpeg_file) == bytes.size()) {
+              GrayImage image = load_jpeg_grayscale_turbojpeg(bytes.data(), bytes.size());
+              if (image.valid()) {
+                std::fclose(jpeg_file);
+                return image;
+              }
+            }
+          }
+          std::fclose(jpeg_file);
+        }
+      }
+    }
+  }
+#endif
   int width = 0;
   int height = 0;
   int channels = 0;
@@ -52,6 +139,14 @@ GrayImage load_grayscale_image(const std::vector<std::uint8_t>& encoded_image) {
   if (encoded_image.empty() || encoded_image.size() > static_cast<std::size_t>(std::numeric_limits<int>::max())) {
     return {};
   }
+#if defined(TRIMANGA_WITH_TURBOJPEG)
+  {
+    GrayImage image = load_jpeg_grayscale_turbojpeg(encoded_image.data(), encoded_image.size());
+    if (image.valid()) {
+      return image;
+    }
+  }
+#endif
   int width = 0;
   int height = 0;
   int channels = 0;

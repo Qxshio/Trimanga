@@ -16,6 +16,7 @@ endif()
 
 option(TRIMANGA_WARNINGS_AS_ERRORS "Treat compiler warnings as errors" OFF)
 option(TRIMANGA_WITH_SDL "Build the interactive SDL2 previewer when SDL2 is available" ON)
+option(TRIMANGA_WITH_TURBOJPEG "Use libjpeg-turbo for faster JPEG decoding when available" ON)
 
 set(TRIMANGA_PREVIEW_SOURCE src/preview/previewer_stub.cpp)
 if(TRIMANGA_WITH_SDL)
@@ -43,6 +44,16 @@ add_executable(trimanga
 
 target_include_directories(trimanga PRIVATE include third_party/stb third_party/miniz)
 
+if(TRIMANGA_WITH_TURBOJPEG)
+  find_path(TURBOJPEG_INCLUDE_DIR turbojpeg.h)
+  find_library(TURBOJPEG_LIBRARY turbojpeg)
+  if(TURBOJPEG_INCLUDE_DIR AND TURBOJPEG_LIBRARY)
+    target_compile_definitions(trimanga PRIVATE TRIMANGA_WITH_TURBOJPEG=1)
+    target_include_directories(trimanga PRIVATE ${TURBOJPEG_INCLUDE_DIR})
+    target_link_libraries(trimanga PRIVATE ${TURBOJPEG_LIBRARY})
+  endif()
+endif()
+
 if(TRIMANGA_WITH_SDL AND SDL2_FOUND)
   add_executable(trimanga-preview
     src/preview/sdl_preview_main.cpp
@@ -58,6 +69,11 @@ if(TRIMANGA_WITH_SDL AND SDL2_FOUND)
   target_compile_definitions(trimanga-preview PRIVATE TRIMANGA_WITH_SDL=1)
   target_include_directories(trimanga-preview PRIVATE include third_party/stb ${SDL2_INCLUDE_DIRS})
   target_link_libraries(trimanga-preview PRIVATE ${SDL2_LIBRARIES})
+  if(TRIMANGA_WITH_TURBOJPEG AND TURBOJPEG_INCLUDE_DIR AND TURBOJPEG_LIBRARY)
+    target_compile_definitions(trimanga-preview PRIVATE TRIMANGA_WITH_TURBOJPEG=1)
+    target_include_directories(trimanga-preview PRIVATE ${TURBOJPEG_INCLUDE_DIR})
+    target_link_libraries(trimanga-preview PRIVATE ${TURBOJPEG_LIBRARY})
+  endif()
 endif()
 
 if(MSVC)

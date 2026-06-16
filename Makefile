@@ -9,6 +9,17 @@ SDL_CFLAGS := $(shell sdl2-config --cflags 2>/dev/null)
 SDL_LIBS := $(shell sdl2-config --libs 2>/dev/null)
 SDL_PREFIX := $(shell sdl2-config --prefix 2>/dev/null)
 SDL_DYLIB := $(firstword $(wildcard $(SDL_PREFIX)/lib/libSDL2-2.0.0.dylib) $(wildcard $(SDL_PREFIX)/lib/libSDL2.dylib))
+TURBOJPEG_PREFIX := $(shell brew --prefix jpeg-turbo 2>/dev/null)
+TURBOJPEG_HEADER := $(firstword $(wildcard /opt/homebrew/include/turbojpeg.h) $(wildcard /usr/local/include/turbojpeg.h) $(wildcard /usr/include/turbojpeg.h) $(wildcard $(TURBOJPEG_PREFIX)/include/turbojpeg.h))
+TURBOJPEG_DYLIB := $(firstword $(wildcard /opt/homebrew/lib/libturbojpeg.dylib) $(wildcard /usr/local/lib/libturbojpeg.dylib) $(wildcard $(TURBOJPEG_PREFIX)/lib/libturbojpeg.dylib) $(wildcard /usr/local/lib/libturbojpeg.so) $(wildcard /usr/lib/libturbojpeg.so) $(wildcard /usr/lib/*/libturbojpeg.so))
+ifneq ($(strip $(TURBOJPEG_HEADER)$(TURBOJPEG_DYLIB)),)
+ifneq ($(strip $(TURBOJPEG_HEADER)),)
+ifneq ($(strip $(TURBOJPEG_DYLIB)),)
+TURBOJPEG_CFLAGS := -DTRIMANGA_WITH_TURBOJPEG=1 -I$(dir $(TURBOJPEG_HEADER))
+TURBOJPEG_LIBS := -L$(dir $(TURBOJPEG_DYLIB)) -lturbojpeg
+endif
+endif
+endif
 ifeq ($(strip $(SDL_LIBS)),)
 PREVIEW_SOURCE := src/preview/previewer_stub.cpp
 PREVIEW_TARGETS :=
@@ -29,10 +40,10 @@ endif
 
 OPTFLAGS ?= -O3 -DNDEBUG
 CFLAGS ?= $(OPTFLAGS) -Wall -Wextra -Ithird_party/miniz
-CXXFLAGS ?= $(OPTFLAGS) -std=c++20 -Wall -Wextra -Wpedantic -Iinclude -Ithird_party/stb -Ithird_party/miniz
+CXXFLAGS ?= $(OPTFLAGS) -std=c++20 -Wall -Wextra -Wpedantic -Iinclude -Ithird_party/stb -Ithird_party/miniz $(TURBOJPEG_CFLAGS)
 PREVIEW_CXXFLAGS ?= $(CXXFLAGS) $(SDL_CFLAGS) -DTRIMANGA_WITH_SDL=1
-LDFLAGS ?=
-PREVIEW_LDFLAGS ?= $(SDL_LIBS)
+LDFLAGS ?= $(TURBOJPEG_LIBS)
+PREVIEW_LDFLAGS ?= $(SDL_LIBS) $(TURBOJPEG_LIBS)
 
 SOURCES := \
 	src/main.cpp \
@@ -62,10 +73,26 @@ all: $(TARGET) $(PREVIEW_TARGETS)
 
 $(TARGET): $(OBJECTS)
 	$(CXX) $(OBJECTS) $(LDFLAGS) -o $@
+ifeq ($(UNAME_S),Darwin)
+ifneq ($(strip $(TURBOJPEG_DYLIB)),)
+	@mkdir -p $(BUILD_DIR)/lib
+	rm -f "$(BUILD_DIR)/lib/$(notdir $(TURBOJPEG_DYLIB))"
+	cp "$(TURBOJPEG_DYLIB)" "$(BUILD_DIR)/lib/$(notdir $(TURBOJPEG_DYLIB))"
+	@install_name=$$(otool -D "$(TURBOJPEG_DYLIB)" | tail -n 1); \
+	install_name_tool -change "$$install_name" "@executable_path/lib/$(notdir $(TURBOJPEG_DYLIB))" "$@"
+endif
+endif
 
 $(PREVIEW_TARGET): $(PREVIEW_HELPER_OBJECTS)
 	$(CXX) $(PREVIEW_HELPER_OBJECTS) $(PREVIEW_LDFLAGS) -o $@
 ifeq ($(UNAME_S),Darwin)
+ifneq ($(strip $(TURBOJPEG_DYLIB)),)
+	@mkdir -p $(BUILD_DIR)/lib
+	rm -f "$(BUILD_DIR)/lib/$(notdir $(TURBOJPEG_DYLIB))"
+	cp "$(TURBOJPEG_DYLIB)" "$(BUILD_DIR)/lib/$(notdir $(TURBOJPEG_DYLIB))"
+	@install_name=$$(otool -D "$(TURBOJPEG_DYLIB)" | tail -n 1); \
+	install_name_tool -change "$$install_name" "@executable_path/lib/$(notdir $(TURBOJPEG_DYLIB))" "$@"
+endif
 ifneq ($(strip $(SDL_DYLIB)),)
 	@mkdir -p $(BUILD_DIR)/lib
 	rm -f "$(BUILD_DIR)/lib/$(notdir $(SDL_DYLIB))"
