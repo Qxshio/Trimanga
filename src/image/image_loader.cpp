@@ -5,6 +5,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <vector>
 
 namespace trimanga {
 
@@ -73,16 +74,27 @@ GrayImage resize_grayscale(const GrayImage& image, int width, int height) {
   if (!image.valid() || width <= 0 || height <= 0) {
     return {};
   }
+  std::vector<int> x_map(static_cast<std::size_t>(width));
+  std::vector<int> y_map(static_cast<std::size_t>(height));
+  for (int x = 0; x < width; ++x) {
+    x_map[static_cast<std::size_t>(x)] =
+        std::clamp(static_cast<int>((static_cast<double>(x) / width) * image.width), 0, image.width - 1);
+  }
+  for (int y = 0; y < height; ++y) {
+    y_map[static_cast<std::size_t>(y)] =
+        std::clamp(static_cast<int>((static_cast<double>(y) / height) * image.height), 0, image.height - 1);
+  }
   GrayImage resized;
   resized.width = width;
   resized.height = height;
   resized.pixels.resize(static_cast<std::size_t>(width * height));
   for (int y = 0; y < height; ++y) {
-    const int src_y = std::clamp(static_cast<int>((static_cast<double>(y) / height) * image.height), 0, image.height - 1);
+    const int src_y = y_map[static_cast<std::size_t>(y)];
+    const auto src_row = static_cast<std::size_t>(src_y * image.width);
+    const auto dst_row = static_cast<std::size_t>(y * width);
     for (int x = 0; x < width; ++x) {
-      const int src_x = std::clamp(static_cast<int>((static_cast<double>(x) / width) * image.width), 0, image.width - 1);
-      resized.pixels[static_cast<std::size_t>(y * width + x)] =
-          image.pixels[static_cast<std::size_t>(src_y * image.width + src_x)];
+      resized.pixels[dst_row + static_cast<std::size_t>(x)] =
+          image.pixels[src_row + static_cast<std::size_t>(x_map[static_cast<std::size_t>(x)])];
     }
   }
   return resized;

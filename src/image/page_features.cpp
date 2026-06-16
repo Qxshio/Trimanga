@@ -121,8 +121,7 @@ int popcount64(std::uint64_t value) {
 
 }  // namespace
 
-PageFeatures extract_page_features(const std::filesystem::path& image_path) {
-  GrayImage original = load_grayscale_image(image_path);
+PageFeatures extract_page_features(const GrayImage& original) {
   if (!original.valid()) {
     return {};
   }
@@ -176,6 +175,10 @@ PageFeatures extract_page_features(const std::filesystem::path& image_path) {
   features.panel_count = static_cast<double>(std::clamp((horizontal + 1) * (vertical + 1), 1, 12));
   features.valid = true;
   return features;
+}
+
+PageFeatures extract_page_features(const std::filesystem::path& image_path) {
+  return extract_page_features(load_grayscale_image(image_path));
 }
 
 VolumeProfile build_volume_profile(std::vector<PageRef>& pages) {

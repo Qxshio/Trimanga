@@ -159,12 +159,15 @@ class TrimangaDetector final : public IPageDetector {
  public:
   std::string name() const override { return "Trimanga detector"; }
 
-  std::string analyze_page(const std::filesystem::path& image_path) const override {
-    GrayImage image = load_grayscale_image(image_path);
+  std::string analyze_image(const GrayImage& image) const override {
     if (!image.valid()) {
       return {};
     }
     return synthetic_text_for(analyze_layout(image));
+  }
+
+  std::string analyze_page(const std::filesystem::path& image_path) const override {
+    return analyze_image(load_grayscale_image(image_path));
   }
 };
 

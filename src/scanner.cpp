@@ -3,6 +3,7 @@
 #include "trimanga/classifier.hpp"
 #include "trimanga/file_utils.hpp"
 #include "trimanga/image_features.hpp"
+#include "trimanga/image_loader.hpp"
 #include "trimanga/detector.hpp"
 #include "trimanga/previewer.hpp"
 
@@ -393,37 +394,6 @@ FeatureStats stats_for_values(std::vector<double> values) {
   return stats;
 }
 
-template <typename Func>
-void parallel_pages(std::vector<PageRef>& pages, int workers, Func&& func) {
-  std::atomic_size_t next{0};
-  const int actual_workers = std::min<int>(std::max(1, workers), static_cast<int>(pages.size()));
-  std::vector<std::thread> threads;
-  threads.reserve(static_cast<std::size_t>(actual_workers));
-  for (int worker = 0; worker < actual_workers; ++worker) {
-    threads.emplace_back([&] {
-      while (true) {
-        const std::size_t index = next.fetch_add(1);
-        if (index >= pages.size()) {
-          return;
-        }
-        func(pages[index], index);
-      }
-    });
-  }
-  for (std::thread& thread : threads) {
-    thread.join();
-  }
-}
-
-void extract_features_parallel(std::vector<PageRef>& pages, int workers) {
-  if (pages.empty()) {
-    return;
-  }
-  parallel_pages(pages, workers, [](PageRef& page, std::size_t) {
-    page.features = extract_page_features(page.image_path);
-  });
-}
-
 VolumeProfile build_volume_profile_from_features(const std::vector<PageRef>& pages) {
   std::vector<double> aspect;
   std::vector<double> edge;
@@ -590,13 +560,6 @@ ScanResult scan(const fs::path& input, const ScanOptions& options) {
   TerminalOutput terminal(options.format == OutputFormat::Table && options.progress);
   ScopedSystemOutputSilencer silence_system_warnings(false);
 
-  const auto profile_started_at = std::chrono::steady_clock::now();
-  std::chrono::steady_clock::time_point profile_finished_at;
-  std::thread profile_thread([&] {
-    extract_features_parallel(pages, workers);
-    profile_finished_at = std::chrono::steady_clock::now();
-  });
-
   const auto analysis_started_at = std::chrono::steady_clock::now();
   for (int worker = 0; worker < workers; ++worker) {
     threads.emplace_back([&] {
@@ -605,8 +568,10 @@ ScanResult scan(const fs::path& input, const ScanOptions& options) {
         if (index >= pages.size()) {
           return;
         }
-        const PageRef& page = pages[index];
-        page_texts[index] = detector->analyze_page(page.image_path);
+        PageRef& page = pages[index];
+        const GrayImage image = load_grayscale_image(page.image_path);
+        page.features = extract_page_features(image);
+        page_texts[index] = detector->analyze_image(image);
         const std::size_t finished = done_analysis.fetch_add(1) + 1;
         if (options.format == OutputFormat::Table && options.progress) {
           std::lock_guard<std::mutex> lock(progress_mutex);
@@ -619,13 +584,15 @@ ScanResult scan(const fs::path& input, const ScanOptions& options) {
   for (std::thread& thread : threads) {
     thread.join();
   }
-  profile_thread.join();
+  const auto analysis_finished_at = std::chrono::steady_clock::now();
   if (options.format == OutputFormat::Table && options.progress) {
     progress_line(options, terminal, pages.size(), pages.size());
     terminal.write("\n");
   }
 
+  const auto profile_started_at = std::chrono::steady_clock::now();
   VolumeProfile profile = build_volume_profile_from_features(pages);
+  const auto profile_finished_at = std::chrono::steady_clock::now();
   std::mutex candidates_mutex;
   std::atomic_size_t next_classify{0};
   std::vector<std::thread> classify_threads;
@@ -655,7 +622,7 @@ ScanResult scan(const fs::path& input, const ScanOptions& options) {
   }
   const auto classified_at = std::chrono::steady_clock::now();
   result.profile_time = profile_finished_at - profile_started_at;
-  result.analysis_time = classified_at - analysis_started_at;
+  result.analysis_time = analysis_finished_at - analysis_started_at + (classified_at - profile_finished_at);
 
   add_visual_matches(result.candidates, pages);
   const auto visual_matched_at = std::chrono::steady_clock::now();
@@ -706,7 +673,7 @@ void print_result_table(const ScanResult& result) {
       std::cout << "  Review copy:   " << seconds(result.review_copy_time) << "\n";
     }
     std::cout << "  Total:         " << seconds(result.total_time) << "\n\n";
-    std::cout << "Profile and page analysis can overlap, so phase times may not add up to total time.\n\n";
+    std::cout << "Analyze includes image loading, page feature extraction, and detector passes.\n\n";
   }
 
   if (result.candidates.empty()) {
