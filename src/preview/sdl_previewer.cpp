@@ -83,6 +83,11 @@ double ease_out(double value) {
   return 1.0 - std::pow(1.0 - value, 3.0);
 }
 
+double ease_in(double value) {
+  value = std::clamp(value, 0.0, 1.0);
+  return value * value * value;
+}
+
 Layout compute_layout(int window_width, int window_height) {
   constexpr int margin = 24;
   constexpr int gap = 14;
@@ -438,6 +443,35 @@ void render_progress(SDL_Renderer* renderer, std::size_t index, std::size_t tota
   fill(renderer, Rect{track.x, track.y, filled, track.h}, kAccent);
 }
 
+void render_rip_overlay(SDL_Renderer* renderer, const Rect& content, double progress) {
+  progress = ease_in(progress);
+  if (progress <= 0.0) {
+    return;
+  }
+
+  const int center_x = content.x + content.w / 2;
+  const int top = content.y + content.h / 2 - static_cast<int>(content.h * 0.33);
+  const int bottom = content.y + content.h / 2 + static_cast<int>(content.h * 0.33);
+  const int tear = static_cast<int>(16 + progress * 46);
+  SDL_Color tear_color{255, 252, 246, static_cast<Uint8>(230 * progress)};
+  SDL_Color edge_color{224, 77, 105, static_cast<Uint8>(190 * progress)};
+
+  for (int y = top; y < bottom; y += 18) {
+    const int wiggle = ((y / 18) % 2 == 0 ? tear : -tear / 2);
+    line(renderer, center_x + wiggle, y, center_x - wiggle, y + 18, tear_color);
+    line(renderer, center_x + wiggle + 3, y, center_x - wiggle + 3, y + 18, edge_color);
+  }
+
+  const int burst = static_cast<int>(progress * 90);
+  for (int index = 0; index < 10; ++index) {
+    const int side = index % 2 == 0 ? -1 : 1;
+    const int y = top + index * ((bottom - top) / 10);
+    const int x1 = center_x + side * (18 + burst / 2);
+    const int x2 = center_x + side * (48 + burst);
+    line(renderer, x1, y, x2, y - 16 + (index % 3) * 11, edge_color);
+  }
+}
+
 void render_button(SDL_Renderer* renderer, const Rect& rect, SDL_Color base, SDL_Color accent, const std::string& label,
                    bool active, bool hovered, bool pressed) {
   const int lift = hovered ? -2 : 0;
@@ -571,6 +605,8 @@ bool review_candidates(std::vector<Candidate>& candidates) {
   ButtonId hovered_button = ButtonId::None;
   ButtonId pressed_button = ButtonId::None;
   double press_timer = 0.0;
+  bool confirming = false;
+  double confirm_time = 0.0;
   TextureCache cache(renderer, candidates);
   cache.preload_near(selected_index, 4);
   update_title(window, candidates[selected_index], selected_index, candidates.size());
@@ -598,6 +634,13 @@ bool review_candidates(std::vector<Candidate>& candidates) {
     badge_pulse = 1.0;
     update_title(window, candidates[selected_index], selected_index, candidates.size());
   };
+  auto start_confirm = [&] {
+    confirming = true;
+    confirm_time = 0.0;
+    hovered_button = ButtonId::None;
+    pressed_button = ButtonId::None;
+    SDL_SetWindowTitle(window, "Trimanga Review - confirming selection");
+  };
 
   bool running = true;
   Uint64 last_tick = SDL_GetPerformanceCounter();
@@ -607,11 +650,13 @@ bool review_candidates(std::vector<Candidate>& candidates) {
     while (SDL_PollEvent(&event) != 0) {
       if (event.type == SDL_QUIT) {
         running = false;
+      } else if (confirming) {
+        continue;
       } else if (event.type == SDL_KEYDOWN) {
         switch (event.key.keysym.sym) {
           case SDLK_ESCAPE:
           case SDLK_q:
-            running = false;
+            start_confirm();
             break;
           case SDLK_RIGHT:
           case SDLK_DOWN:
@@ -692,6 +737,12 @@ bool review_candidates(std::vector<Candidate>& candidates) {
     const double delta_seconds = std::min(0.05, static_cast<double>(now - last_tick) / tick_frequency);
     last_tick = now;
     entry_time += delta_seconds;
+    if (confirming) {
+      confirm_time += delta_seconds;
+      if (confirm_time >= 0.78) {
+        running = false;
+      }
+    }
     focus_pulse = std::max(0.0, focus_pulse - delta_seconds * 4.8);
     badge_pulse = std::max(0.0, badge_pulse - delta_seconds * 5.2);
     press_timer = std::max(0.0, press_timer - delta_seconds);
@@ -716,9 +767,9 @@ bool review_candidates(std::vector<Candidate>& candidates) {
     const Rect delete_button{button_x, button_y, button_width, 50};
     const Rect toggle_all_button{button_x + button_width + button_gap, button_y, button_width, 50};
     hovered_button = ButtonId::None;
-    if (delete_button.contains(mouse_x, mouse_y)) {
+    if (!confirming && delete_button.contains(mouse_x, mouse_y)) {
       hovered_button = ButtonId::Delete;
-    } else if (toggle_all_button.contains(mouse_x, mouse_y)) {
+    } else if (!confirming && toggle_all_button.contains(mouse_x, mouse_y)) {
       hovered_button = ButtonId::ToggleAll;
     }
     const double header_alpha = ease_out(std::min(1.0, entry_time / 0.20));
@@ -729,16 +780,26 @@ bool review_candidates(std::vector<Candidate>& candidates) {
     render_header(renderer, layout.header, selected_index, candidates.size(), candidates[selected_index].review_action,
                   header_alpha);
 
+    const double gather_progress = confirming ? ease_out(std::min(1.0, confirm_time / 0.36)) : 0.0;
+    const double rip_progress = confirming ? std::clamp((confirm_time - 0.30) / 0.38, 0.0, 1.0) : 0.0;
     const int base = static_cast<int>(std::round(carousel_position));
     for (int offset = 3; offset >= -3; --offset) {
       const int candidate_index = base + offset;
       if (candidate_index < 0 || candidate_index >= static_cast<int>(candidates.size())) {
         continue;
       }
+      if (candidate_index == static_cast<int>(selected_index)) {
+        continue;
+      }
+      const double visual_offset = (static_cast<double>(candidate_index) - carousel_position) * (1.0 - gather_progress);
       render_page_card(renderer, cache, candidates, static_cast<std::size_t>(candidate_index),
-                       static_cast<double>(candidate_index) - carousel_position, layout.content,
+                       visual_offset, layout.content,
                        ease_out(focus_pulse) * content_alpha, ease_out(badge_pulse) * content_alpha);
     }
+    const double active_offset = (static_cast<double>(selected_index) - carousel_position) * (1.0 - gather_progress);
+    render_page_card(renderer, cache, candidates, selected_index, active_offset, layout.content,
+                     ease_out(focus_pulse) * content_alpha, ease_out(badge_pulse) * content_alpha);
+    render_rip_overlay(renderer, layout.content, rip_progress);
 
     const Rect progress{layout.action.x + 18, layout.action.y + 12, layout.action.w - 36, 6};
     render_action_area(renderer, layout.action, delete_button, toggle_all_button, candidates[selected_index].review_action,
