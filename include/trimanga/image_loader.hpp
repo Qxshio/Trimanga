@@ -23,6 +23,7 @@ struct ColorImage {
 };
 
 GrayImage load_grayscale_image(const std::filesystem::path& image_path);
+GrayImage load_grayscale_image(const std::vector<std::uint8_t>& encoded_image);
 ColorImage load_color_image(const std::filesystem::path& image_path);
 GrayImage resize_grayscale(const GrayImage& image, int width, int height);
 

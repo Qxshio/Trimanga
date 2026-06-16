@@ -27,6 +27,7 @@ struct PageRef {
   std::filesystem::path image_path;
   std::string archive_name;
   std::string label;
+  std::optional<std::size_t> archive_index;
   PageFeatures features;
 };
 

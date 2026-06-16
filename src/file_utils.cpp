@@ -6,6 +6,7 @@
 #include <cctype>
 #include <chrono>
 #include <filesystem>
+#include <mutex>
 #include <random>
 #include <stdexcept>
 #include <string>
@@ -96,8 +97,82 @@ void copy_file_create_dirs(const fs::path& from, const fs::path& to) {
   fs::copy_file(from, to, fs::copy_options::overwrite_existing);
 }
 
+class CbzImageReader::Impl {
+ public:
+  explicit Impl(const fs::path& cbz) {
+    if (!mz_zip_reader_init_file(&archive_, cbz.string().c_str(), 0)) {
+      throw std::runtime_error(zip_error_message("failed to open archive", archive_));
+    }
+
+    const mz_uint file_count = mz_zip_reader_get_num_files(&archive_);
+    entries_.reserve(file_count);
+    for (mz_uint index = 0; index < file_count; ++index) {
+      mz_zip_archive_file_stat stat{};
+      if (!mz_zip_reader_file_stat(&archive_, index, &stat)) {
+        throw std::runtime_error(zip_error_message("failed to read archive entry", archive_));
+      }
+
+      const std::string archive_name = stat.m_filename;
+      if (!is_safe_archive_name(archive_name)) {
+        throw std::runtime_error("archive contains an unsafe path: " + archive_name);
+      }
+      if (mz_zip_reader_is_file_a_directory(&archive_, index) || !is_image_path(fs::path(archive_name))) {
+        continue;
+      }
+
+      ArchiveEntry entry;
+      entry.archive_name = archive_name;
+      entry.index = index;
+      entry.uncompressed_size = static_cast<std::size_t>(stat.m_uncomp_size);
+      entries_.push_back(std::move(entry));
+    }
+
+    std::sort(entries_.begin(), entries_.end(), [](const ArchiveEntry& left, const ArchiveEntry& right) {
+      return left.archive_name < right.archive_name;
+    });
+  }
+
+  ~Impl() {
+    mz_zip_reader_end(&archive_);
+  }
+
+  const std::vector<ArchiveEntry>& entries() const {
+    return entries_;
+  }
+
+  ArchiveImage read_image(const ArchiveEntry& entry) {
+    std::lock_guard<std::mutex> lock(mutex_);
+    ArchiveImage image;
+    image.archive_name = entry.archive_name;
+    image.bytes.resize(entry.uncompressed_size);
+    if (!mz_zip_reader_extract_to_mem(&archive_, static_cast<mz_uint>(entry.index), image.bytes.data(),
+                                      image.bytes.size(), 0)) {
+      throw std::runtime_error(zip_error_message("failed to read archive entry", archive_));
+    }
+    return image;
+  }
+
+ private:
+  mz_zip_archive archive_{};
+  std::mutex mutex_;
+  std::vector<ArchiveEntry> entries_;
+};
+
+CbzImageReader::CbzImageReader(const fs::path& cbz) : impl_(std::make_unique<Impl>(cbz)) {}
+
+CbzImageReader::~CbzImageReader() = default;
+
+const std::vector<ArchiveEntry>& CbzImageReader::entries() const {
+  return impl_->entries();
+}
+
+ArchiveImage CbzImageReader::read_image(const ArchiveEntry& entry) {
+  return impl_->read_image(entry);
+}
+
 std::vector<fs::path> extract_cbz(const fs::path& cbz, const fs::path& destination) {
   fs::create_directories(destination);
+  std::vector<fs::path> images;
 
   mz_zip_archive archive{};
   if (!mz_zip_reader_init_file(&archive, cbz.string().c_str(), 0)) {
@@ -117,22 +192,25 @@ std::vector<fs::path> extract_cbz(const fs::path& cbz, const fs::path& destinati
       mz_zip_reader_end(&archive);
       throw std::runtime_error("archive contains an unsafe path: " + archive_name);
     }
-
-    fs::path output = destination / fs::path(archive_name);
     if (mz_zip_reader_is_file_a_directory(&archive, index)) {
-      fs::create_directories(output);
+      continue;
+    }
+    if (!is_image_path(fs::path(archive_name))) {
       continue;
     }
 
+    fs::path output = destination / fs::path(archive_name);
     fs::create_directories(output.parent_path());
     if (!mz_zip_reader_extract_to_file(&archive, index, output.string().c_str(), 0)) {
       mz_zip_reader_end(&archive);
       throw std::runtime_error(zip_error_message("failed to extract archive entry", archive));
     }
+    images.push_back(std::move(output));
   }
 
   mz_zip_reader_end(&archive);
-  return list_images_recursive(destination);
+  std::sort(images.begin(), images.end());
+  return images;
 }
 
 void replace_archive_from_directory(const fs::path& source_dir, const fs::path& archive_path) {

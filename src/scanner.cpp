@@ -15,6 +15,7 @@
 #include <iomanip>
 #include <iostream>
 #include <cmath>
+#include <memory>
 #include <mutex>
 #include <numeric>
 #include <sstream>
@@ -190,6 +191,21 @@ std::string relative_or_filename(const fs::path& path, const fs::path& root) {
     return relative.generic_string();
   }
   return path.filename().string();
+}
+
+std::vector<PageRef> build_archive_page_refs(const std::vector<ArchiveEntry>& entries) {
+  std::vector<PageRef> pages;
+  pages.reserve(entries.size());
+  for (std::size_t index = 0; index < entries.size(); ++index) {
+    PageRef page;
+    page.order = index + 1;
+    page.archive_name = entries[index].archive_name;
+    page.label = page.archive_name;
+    page.image_path = fs::path(page.archive_name);
+    page.archive_index = index;
+    pages.push_back(std::move(page));
+  }
+  return pages;
 }
 
 std::vector<PageRef> build_page_refs(const fs::path& input, TempDirectory& temp) {
@@ -517,7 +533,17 @@ ScanResult scan(const fs::path& input, const ScanOptions& options) {
   status_line(options, "Preparing input...");
 
   TempDirectory temp;
-  std::vector<PageRef> pages = build_page_refs(input, temp);
+  const bool prefer_memory_archive =
+      fs::is_regular_file(input) && is_cbz_path(input) && !options.preview && !options.review_dir.has_value() &&
+      !options.keep_temp;
+  std::unique_ptr<CbzImageReader> archive_reader;
+  std::vector<PageRef> pages;
+  if (prefer_memory_archive) {
+    archive_reader = std::make_unique<CbzImageReader>(input);
+    pages = build_archive_page_refs(archive_reader->entries());
+  } else {
+    pages = build_page_refs(input, temp);
+  }
   const auto prepared_at = std::chrono::steady_clock::now();
   if (options.keep_temp) {
     temp.keep();
@@ -569,7 +595,13 @@ ScanResult scan(const fs::path& input, const ScanOptions& options) {
           return;
         }
         PageRef& page = pages[index];
-        const GrayImage image = load_grayscale_image(page.image_path);
+        GrayImage image;
+        if (archive_reader != nullptr && page.archive_index.has_value()) {
+          const ArchiveImage archive_image = archive_reader->read_image(archive_reader->entries()[*page.archive_index]);
+          image = load_grayscale_image(archive_image.bytes);
+        } else {
+          image = load_grayscale_image(page.image_path);
+        }
         page.features = extract_page_features(image);
         page_texts[index] = detector->analyze_image(image);
         const std::size_t finished = done_analysis.fetch_add(1) + 1;
@@ -673,7 +705,7 @@ void print_result_table(const ScanResult& result) {
       std::cout << "  Review copy:   " << seconds(result.review_copy_time) << "\n";
     }
     std::cout << "  Total:         " << seconds(result.total_time) << "\n\n";
-    std::cout << "Analyze includes image loading, page feature extraction, and detector passes.\n\n";
+    std::cout << "Analyze includes archive streaming, image loading, page feature extraction, and detector passes.\n\n";
   }
 
   if (result.candidates.empty()) {

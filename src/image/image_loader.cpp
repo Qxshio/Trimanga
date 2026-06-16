@@ -5,15 +5,14 @@
 
 #include <algorithm>
 #include <cmath>
+#include <limits>
 #include <vector>
 
 namespace trimanga {
 
-GrayImage load_grayscale_image(const std::filesystem::path& image_path) {
-  int width = 0;
-  int height = 0;
-  int channels = 0;
-  unsigned char* data = stbi_load(image_path.string().c_str(), &width, &height, &channels, 0);
+namespace {
+
+GrayImage grayscale_from_stbi(unsigned char* data, int width, int height, int channels) {
   if (data == nullptr || width <= 0 || height <= 0 || channels <= 0) {
     if (data != nullptr) {
       stbi_image_free(data);
@@ -37,6 +36,28 @@ GrayImage load_grayscale_image(const std::filesystem::path& image_path) {
   }
   stbi_image_free(data);
   return image;
+}
+
+}  // namespace
+
+GrayImage load_grayscale_image(const std::filesystem::path& image_path) {
+  int width = 0;
+  int height = 0;
+  int channels = 0;
+  unsigned char* data = stbi_load(image_path.string().c_str(), &width, &height, &channels, 0);
+  return grayscale_from_stbi(data, width, height, channels);
+}
+
+GrayImage load_grayscale_image(const std::vector<std::uint8_t>& encoded_image) {
+  if (encoded_image.empty() || encoded_image.size() > static_cast<std::size_t>(std::numeric_limits<int>::max())) {
+    return {};
+  }
+  int width = 0;
+  int height = 0;
+  int channels = 0;
+  unsigned char* data =
+      stbi_load_from_memory(encoded_image.data(), static_cast<int>(encoded_image.size()), &width, &height, &channels, 0);
+  return grayscale_from_stbi(data, width, height, channels);
 }
 
 ColorImage load_color_image(const std::filesystem::path& image_path) {
