@@ -6,11 +6,20 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdint>
 #include <vector>
+
+#if defined(__APPLE__)
+#include <sys/types.h>
+#include <sys/wait.h>
+#include <unistd.h>
+#endif
 
 namespace trimanga {
 
-bool review_candidates(std::vector<Candidate>& candidates) {
+namespace {
+
+bool run_review_window(std::vector<Candidate>& candidates) {
   using namespace preview;
 
   if (candidates.empty()) {
@@ -328,6 +337,94 @@ bool review_candidates(std::vector<Candidate>& candidates) {
 
   close_preview_now();
   return true;
+}
+
+#if defined(__APPLE__)
+bool read_all(int fd, std::uint8_t* data, std::size_t size) {
+  std::size_t offset = 0;
+  while (offset < size) {
+    const ssize_t count = read(fd, data + offset, size - offset);
+    if (count <= 0) {
+      return false;
+    }
+    offset += static_cast<std::size_t>(count);
+  }
+  return true;
+}
+
+bool write_all(int fd, const std::uint8_t* data, std::size_t size) {
+  std::size_t offset = 0;
+  while (offset < size) {
+    const ssize_t count = write(fd, data + offset, size - offset);
+    if (count <= 0) {
+      return false;
+    }
+    offset += static_cast<std::size_t>(count);
+  }
+  return true;
+}
+
+std::uint8_t encode_action(ReviewAction action) {
+  return action == ReviewAction::Delete ? 1 : 0;
+}
+
+ReviewAction decode_action(std::uint8_t value) {
+  return value == 1 ? ReviewAction::Delete : ReviewAction::Undecided;
+}
+
+bool review_candidates_in_child_process(std::vector<Candidate>& candidates) {
+  int pipe_fds[2] = {-1, -1};
+  if (pipe(pipe_fds) != 0) {
+    return run_review_window(candidates);
+  }
+
+  const pid_t pid = fork();
+  if (pid < 0) {
+    close(pipe_fds[0]);
+    close(pipe_fds[1]);
+    return run_review_window(candidates);
+  }
+
+  if (pid == 0) {
+    close(pipe_fds[0]);
+    const bool reviewed = run_review_window(candidates);
+    std::vector<std::uint8_t> payload(candidates.size() + 1, 0);
+    payload[0] = reviewed ? 1 : 0;
+    for (std::size_t index = 0; index < candidates.size(); ++index) {
+      payload[index + 1] = encode_action(candidates[index].review_action);
+    }
+    const bool wrote = write_all(pipe_fds[1], payload.data(), payload.size());
+    close(pipe_fds[1]);
+    _exit(wrote ? 0 : 2);
+  }
+
+  close(pipe_fds[1]);
+  std::vector<std::uint8_t> payload(candidates.size() + 1, 0);
+  const bool read_ok = read_all(pipe_fds[0], payload.data(), payload.size());
+  close(pipe_fds[0]);
+
+  int status = 0;
+  while (waitpid(pid, &status, 0) < 0) {
+  }
+  if (!read_ok || !WIFEXITED(status) || WEXITSTATUS(status) != 0 || payload[0] == 0) {
+    return false;
+  }
+
+  for (std::size_t index = 0; index < candidates.size(); ++index) {
+    candidates[index].review_action = decode_action(payload[index + 1]);
+  }
+  return true;
+}
+#endif
+
+}  // namespace
+
+bool review_candidates(std::vector<Candidate>& candidates) {
+#if defined(__APPLE__)
+  return review_candidates_in_child_process(candidates);
+#else
+  return run_review_window(candidates);
+#endif
 }
 
 }  // namespace trimanga
