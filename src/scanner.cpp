@@ -33,6 +33,8 @@ namespace trimanga {
 
 namespace {
 
+constexpr int kMaxWorkers = 256;
+
 class TempDirectory {
  public:
   TempDirectory() = default;
@@ -393,19 +395,26 @@ VolumeProfile build_volume_profile_from_features(const std::vector<PageRef>& pag
 }
 
 void status_line(const ScanOptions& options, const std::string& message) {
-  if (options.format == OutputFormat::Table) {
+  if (options.format == OutputFormat::Table && options.verbose) {
     std::cout << message << "\n";
   }
 }
 
 void progress_line(const ScanOptions& options, TerminalOutput& terminal, std::size_t finished, std::size_t total) {
-  if (options.format != OutputFormat::Table) {
+  if (options.format != OutputFormat::Table || !options.progress) {
     return;
   }
   std::ostringstream line;
   line << "\r\033[2KScanning pages " << bar(static_cast<double>(finished) / static_cast<double>(total)) << ' '
        << finished << '/' << total;
   terminal.write(line.str());
+}
+
+int worker_count_for(const ScanOptions& options, std::size_t page_count) {
+  if (page_count == 0) {
+    return 1;
+  }
+  return std::min<int>({std::max(1, options.workers), static_cast<int>(page_count), kMaxWorkers});
 }
 
 }  // namespace
@@ -439,7 +448,7 @@ ScanResult scan(const fs::path& input, const ScanOptions& options) {
     return empty;
   }
 
-  const int workers = std::min<int>(options.workers, static_cast<int>(pages.size()));
+  const int workers = worker_count_for(options, pages.size());
   auto detector = make_page_detector();
 
   ScanResult result;
@@ -460,9 +469,12 @@ ScanResult scan(const fs::path& input, const ScanOptions& options) {
 
   status_line(options, "Found " + std::to_string(pages.size()) + " pages. Analyzing with " + std::to_string(workers) +
                            " workers...");
+  if (options.verbose && options.workers > workers) {
+    status_line(options, "Worker request capped at " + std::to_string(workers) + " to keep the terminal responsive.");
+  }
   status_line(options, "Using Trimanga's built-in scanlation and ad detector.");
-  TerminalOutput terminal(options.format == OutputFormat::Table);
-  ScopedSystemOutputSilencer silence_system_warnings(options.format == OutputFormat::Table && !options.details);
+  TerminalOutput terminal(options.format == OutputFormat::Table && options.progress);
+  ScopedSystemOutputSilencer silence_system_warnings(false);
 
   const auto profile_started_at = std::chrono::steady_clock::now();
   std::chrono::steady_clock::time_point profile_finished_at;
@@ -482,7 +494,7 @@ ScanResult scan(const fs::path& input, const ScanOptions& options) {
         const PageRef& page = pages[index];
         page_texts[index] = detector->analyze_page(page.image_path);
         const std::size_t finished = done_analysis.fetch_add(1) + 1;
-        if (options.format == OutputFormat::Table) {
+        if (options.format == OutputFormat::Table && options.progress) {
           std::lock_guard<std::mutex> lock(progress_mutex);
           progress_line(options, terminal, finished, pages.size());
         }
@@ -494,7 +506,7 @@ ScanResult scan(const fs::path& input, const ScanOptions& options) {
     thread.join();
   }
   profile_thread.join();
-  if (options.format == OutputFormat::Table) {
+  if (options.format == OutputFormat::Table && options.progress) {
     progress_line(options, terminal, pages.size(), pages.size());
     terminal.write("\n");
   }

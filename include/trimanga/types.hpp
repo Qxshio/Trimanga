@@ -77,6 +77,8 @@ struct ScanOptions {
   bool keep_temp = false;
   bool details = false;
   bool timings = false;
+  bool progress = false;
+  bool verbose = false;
 };
 
 struct ScanResult {

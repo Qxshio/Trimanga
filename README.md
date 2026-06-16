@@ -149,11 +149,17 @@ Options:
 --review-dir PATH            Copy suspicious pages into this folder
 --details                    Include detector signals in table output
 --timings                    Print phase timings after the scan
+--progress                   Show live progress while scanning
+--verbose                    Show setup/status messages while scanning
+--quiet                      Only print final results. Default
 --keep-temp                  Keep extracted archive temp files
 ```
 
 The default table output is intentionally compact. Use `--details` when you want to inspect the detector signals that caused each page to be flagged.
 Use `--timings` to see where time is spent across extraction, page profiling, page analysis, visual matching and review export.
+Use `--progress` or `--verbose` when you want live scan feedback.
+
+Worker requests are capped internally to keep the terminal responsive. Extremely high values such as `--workers 10000` will not create thousands of threads.
 
 ## Package Builds
 

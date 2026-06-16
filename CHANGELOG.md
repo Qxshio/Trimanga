@@ -13,4 +13,6 @@
 - Parallelized page profiling and page analysis.
 - Removed external recognition dependencies.
 - Added a portable image decoder for consistent macOS, Linux and Windows behavior.
+- Made scans quiet by default, with `--progress` and `--verbose` for live feedback.
+- Capped excessive worker requests to keep the terminal responsive.
 - Added `--timings` for scan phase benchmarks.

@@ -23,6 +23,9 @@ void print_help() {
       << "  --review-dir <path>            Copy suspicious pages into this folder\n"
       << "  --details                      Include detector signals in table output\n"
       << "  --timings                      Print phase timings after the scan\n"
+      << "  --progress                     Show live progress while scanning\n"
+      << "  --verbose                      Show setup/status messages while scanning\n"
+      << "  --quiet                        Only print final results. Default\n"
       << "  --keep-temp                    Keep extracted archive temp files\n"
       << "  --help                         Show this help\n"
       << "  --version                      Show version\n\n"
@@ -86,6 +89,14 @@ int main(int argc, char** argv) {
         options.details = true;
       } else if (arg == "--timings") {
         options.timings = true;
+      } else if (arg == "--progress") {
+        options.progress = true;
+      } else if (arg == "--verbose") {
+        options.verbose = true;
+        options.progress = true;
+      } else if (arg == "--quiet") {
+        options.verbose = false;
+        options.progress = false;
       } else if (arg == "--keep-temp") {
         options.keep_temp = true;
       } else {
