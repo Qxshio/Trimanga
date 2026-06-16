@@ -69,6 +69,7 @@ enum class OcrPreference {
   Auto,
   AppleVision,
   Tesseract,
+  None,
 };
 
 enum class OutputFormat {

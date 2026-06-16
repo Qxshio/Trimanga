@@ -460,8 +460,12 @@ ScanResult scan(const fs::path& input, const ScanOptions& options) {
 
   status_line(options, "Found " + std::to_string(pages.size()) + " pages. Analyzing with " + std::to_string(workers) +
                            " workers...");
-  status_line(options, "Using " + result.ocr_backend +
-                           (options.ocr_speed == OcrSpeed::Fast ? " in fast mode." : " in accurate mode."));
+  if (options.ocr == OcrPreference::None) {
+    status_line(options, "Using visual-only mode with no OCR backend.");
+  } else {
+    status_line(options, "Using " + result.ocr_backend +
+                             (options.ocr_speed == OcrSpeed::Fast ? " in fast mode." : " in accurate mode."));
+  }
   TerminalOutput terminal(options.format == OutputFormat::Table);
   ScopedSystemOutputSilencer silence_system_warnings(options.format == OutputFormat::Table && !options.details);
 

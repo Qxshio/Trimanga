@@ -162,7 +162,8 @@ trimanga scan "./Volume 01.cbz" --format json
 Options:
 
 ```text
---ocr auto|apple|tesseract   OCR backend to use. Default: auto
+--ocr auto|apple|tesseract|none
+                              OCR backend to use. Default: auto
 --ocr-speed accurate|fast     OCR recognition mode. Default: accurate
 --workers N                  Number of OCR workers. Default: 4
 --format table|json          Output format. Default: table
@@ -182,6 +183,14 @@ trimanga scan "./Volume 01.cbz" --workers 8 --ocr-speed fast --timings
 ```
 
 Fast OCR is useful for large libraries and review-first workflows. Accurate OCR remains the default because compact credit pages can contain small text.
+
+For dependency-free visual analysis only:
+
+```sh
+trimanga scan "./Volume 01.cbz" --ocr none --timings
+```
+
+`--ocr none` avoids OCR entirely. It is very lightweight, but it cannot read credit/recruitment text, so it should be treated as a quick visual pass rather than a full scan.
 
 ## Package Builds
 

@@ -14,4 +14,6 @@
 - Parallelized page profiling so `--workers` applies to image analysis as well as OCR.
 - Overlapped page profiling and OCR so the scanner does less full-volume waiting between phases.
 - Added `--ocr-speed fast` for faster Apple Vision and Tesseract scans.
+- Added `--ocr none` for dependency-free visual-only scans.
+- Capped Tesseract's internal POSIX OpenMP thread usage to reduce resource spikes.
 - Added `--timings` for scan phase benchmarks.

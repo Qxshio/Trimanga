@@ -9,6 +9,7 @@
 #include <set>
 #include <sstream>
 #include <string>
+#include <vector>
 
 namespace trimanga {
 
@@ -72,7 +73,12 @@ class TesseractBackend final : public IOcrBackend {
     const std::vector<std::string> modes = speed_ == OcrSpeed::Fast ? std::vector<std::string>{"6"}
                                                                     : std::vector<std::string>{"6", "11", "12"};
     for (const std::string& psm : modes) {
+#if defined(_WIN32)
       ProcessResult result = run_process({binary, image_path.string(), "stdout", "--psm", psm}, 30);
+#else
+      ProcessResult result =
+          run_process({"env", "OMP_THREAD_LIMIT=1", binary, image_path.string(), "stdout", "--psm", psm}, 30);
+#endif
       if (result.exit_code != 0) {
         continue;
       }

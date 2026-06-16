@@ -18,7 +18,8 @@ void print_help() {
       << "Usage:\n"
       << "  trimanga scan <folder-or-cbz> [options]\n\n"
       << "Options:\n"
-      << "  --ocr <auto|apple|tesseract>   OCR backend to use. Default: auto\n"
+      << "  --ocr <auto|apple|tesseract|none>\n"
+      << "                                  OCR backend to use. Default: auto\n"
       << "  --ocr-speed <accurate|fast>     OCR recognition mode. Default: accurate\n"
       << "  --workers <n>                  Number of OCR workers. Default: 4\n"
       << "  --format <table|json>          Output format. Default: table\n"
@@ -42,6 +43,9 @@ trimanga::OcrPreference parse_ocr(const std::string& value) {
   }
   if (value == "tesseract") {
     return trimanga::OcrPreference::Tesseract;
+  }
+  if (value == "none" || value == "off" || value == "visual") {
+    return trimanga::OcrPreference::None;
   }
   throw std::runtime_error("invalid OCR backend: " + value);
 }
