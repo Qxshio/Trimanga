@@ -254,6 +254,10 @@ void draw_keycap(SDL_Renderer* renderer, int x, int y, const std::string& label,
   draw_centered_text(renderer, cap, label, color, 2);
 }
 
+int keycap_width(const std::string& label) {
+  return std::max(28, text_width(label, 2) + 12);
+}
+
 std::string action_name(ReviewAction action) {
   switch (action) {
     case ReviewAction::Keep:
@@ -433,25 +437,34 @@ void render_page_card(SDL_Renderer* renderer, TextureCache& cache, std::vector<C
 
   const double tear = ease_out(tear_progress);
   if (tear > 0.0) {
-    const double fall = ease_in(std::clamp((tear_progress - 0.22) / 0.78, 0.0, 1.0));
+    const double fall = ease_in(std::clamp((tear_progress - 0.16) / 0.72, 0.0, 1.0));
     const int split = static_cast<int>(10 + tear * (content.w * 0.58));
     const int fall_left = static_cast<int>(fall * (content.h * 1.65));
     const int fall_right = static_cast<int>(fall * (content.h * 1.82));
     const int tilt = static_cast<int>(tear * 10);
     const Rect left_card{card.x - split, card.y + fall_left - tilt, card.w / 2, card.h};
     const Rect right_card{card.x + card.w / 2 + split, card.y + fall_right + tilt, card.w - card.w / 2, card.h};
+    const bool left_visible = left_card.x + left_card.w >= 0 && left_card.y < content.y + content.h + 80;
+    const bool right_visible = right_card.x <= content.x + content.w && right_card.y < content.y + content.h + 80;
+    if (!left_visible && !right_visible) {
+      return;
+    }
 
-    fill(renderer, Rect{left_card.x + 8, left_card.y + 10, left_card.w, left_card.h}, SDL_Color{116, 62, 88, 42});
-    fill(renderer, Rect{right_card.x + 8, right_card.y + 10, right_card.w, right_card.h}, SDL_Color{116, 62, 88, 42});
-    fill(renderer, left_card, kPaper);
-    fill(renderer, right_card, kPaper);
+    if (left_visible) {
+      fill(renderer, Rect{left_card.x + 8, left_card.y + 10, left_card.w, left_card.h}, SDL_Color{116, 62, 88, 42});
+      fill(renderer, left_card, kPaper);
+    }
+    if (right_visible) {
+      fill(renderer, Rect{right_card.x + 8, right_card.y + 10, right_card.w, right_card.h}, SDL_Color{116, 62, 88, 42});
+      fill(renderer, right_card, kPaper);
+    }
 
     const Rect image_bounds{card.x + 12, card.y + 12, card.w - 24, card.h - 24};
     if (texture != nullptr && texture->texture != nullptr) {
       const Rect destination = fit_image(texture->width, texture->height, image_bounds);
       const int left_clip = std::clamp(card.x + card.w / 2 - destination.x, 0, destination.w);
       const int right_clip = destination.w - left_clip;
-      if (left_clip > 0) {
+      if (left_clip > 0 && left_visible) {
         SDL_Rect source{0, 0, static_cast<int>((static_cast<double>(left_clip) / destination.w) * texture->width),
                         texture->height};
         SDL_Rect dest{left_card.x + std::max(0, destination.x - card.x), left_card.y + destination.y - card.y,
@@ -459,7 +472,7 @@ void render_page_card(SDL_Renderer* renderer, TextureCache& cache, std::vector<C
         SDL_SetTextureAlphaMod(texture->texture, static_cast<Uint8>(255 * (1.0 - fall * 0.35)));
         SDL_RenderCopy(renderer, texture->texture, &source, &dest);
       }
-      if (right_clip > 0) {
+      if (right_clip > 0 && right_visible) {
         const int source_x = static_cast<int>((static_cast<double>(left_clip) / destination.w) * texture->width);
         SDL_Rect source{source_x, 0, texture->width - source_x, texture->height};
         SDL_Rect dest{right_card.x + std::max(0, destination.x + left_clip - (card.x + card.w / 2)),
@@ -469,9 +482,15 @@ void render_page_card(SDL_Renderer* renderer, TextureCache& cache, std::vector<C
       }
       SDL_SetTextureAlphaMod(texture->texture, selected ? 255 : 165);
     }
-    outline(renderer, left_card, SDL_Color{230, 190, 207, 255});
-    outline(renderer, right_card, SDL_Color{230, 190, 207, 255});
-    render_torn_edges(renderer, left_card, right_card, tear);
+    if (left_visible) {
+      outline(renderer, left_card, SDL_Color{230, 190, 207, 255});
+    }
+    if (right_visible) {
+      outline(renderer, right_card, SDL_Color{230, 190, 207, 255});
+    }
+    if (left_visible || right_visible) {
+      render_torn_edges(renderer, left_card, right_card, tear);
+    }
     return;
   }
 
@@ -574,24 +593,30 @@ void render_action_area(SDL_Renderer* renderer, const Rect& action, const Rect& 
 void render_footer(SDL_Renderer* renderer, const Rect& footer) {
   fill(renderer, footer, SDL_Color{255, 252, 246, 218});
   outline(renderer, footer, SDL_Color{229, 190, 207, 255});
-  int x = footer.x + 14;
   const int y = footer.y + 10;
+  const int esc_width = keycap_width("ESC");
+  const int confirm_width = text_width("HOLD TO CONFIRM", 2);
+  const int scroll_width = 28 + 6 + 28 + 12 + text_width("SCROLL", 2);
+  const int toggle_width = 48 + 10 + keycap_width("X") + 12 + text_width("TOGGLE", 2);
+  const int group_gap = 34;
+  const int total_width = esc_width + 10 + confirm_width + group_gap + scroll_width + group_gap + toggle_width;
+  int x = footer.x + std::max(12, (footer.w - total_width) / 2);
+
   draw_keycap(renderer, x, y, "ESC", kMuted);
-  x += 52;
+  x += esc_width + 10;
   draw_text(renderer, x, y + 5, "HOLD TO CONFIRM", kMuted, 2);
-  x += 124;
+  x += confirm_width + group_gap;
   draw_arrow_key(renderer, x, y, true, kMuted);
   x += 34;
   draw_arrow_key(renderer, x, y, false, kMuted);
   x += 40;
   draw_text(renderer, x, y + 5, "SCROLL", kMuted, 2);
-
-  int right = footer.x + footer.w - 218;
-  draw_spacebar(renderer, Rect{right, y, 48, 24}, kMuted);
-  right += 58;
-  draw_keycap(renderer, right, y, "X", kMuted);
-  right += 38;
-  draw_text(renderer, right, y + 5, "TOGGLE", kMuted, 2);
+  x += text_width("SCROLL", 2) + group_gap;
+  draw_spacebar(renderer, Rect{x, y, 48, 24}, kMuted);
+  x += 58;
+  draw_keycap(renderer, x, y, "X", kMuted);
+  x += keycap_width("X") + 12;
+  draw_text(renderer, x, y + 5, "TOGGLE", kMuted, 2);
 }
 
 void update_logical_render_size(SDL_Window* window, SDL_Renderer* renderer, int& window_width, int& window_height) {
@@ -802,7 +827,7 @@ bool review_candidates(std::vector<Candidate>& candidates) {
     }
     if (confirming) {
       confirm_time += delta_seconds;
-      if (confirm_time >= 1.12) {
+      if (confirm_time >= 0.92) {
         running = false;
       }
     }
@@ -843,8 +868,8 @@ bool review_candidates(std::vector<Candidate>& candidates) {
     render_header(renderer, layout.header, selected_index, candidates.size(), candidates[selected_index].review_action,
                   header_alpha);
 
-    const double gather_progress = confirming ? ease_out(std::min(1.0, confirm_time / 0.34)) : 0.0;
-    const double tear_progress = confirming ? std::clamp((confirm_time - 0.28) / 0.78, 0.0, 1.0) : 0.0;
+    const double gather_progress = confirming ? ease_out(std::min(1.0, confirm_time / 0.26)) : 0.0;
+    const double tear_progress = confirming ? std::clamp((confirm_time - 0.20) / 0.62, 0.0, 1.0) : 0.0;
     const double hold_progress = escape_held && !confirming ? std::clamp(escape_hold_time / 1.0, 0.0, 1.0) : 0.0;
     const double shake = hold_progress * 5.0;
     const int base = static_cast<int>(std::round(carousel_position));
