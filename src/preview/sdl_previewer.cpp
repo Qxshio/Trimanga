@@ -88,6 +88,11 @@ double ease_in(double value) {
   return value * value * value;
 }
 
+double smoothstep(double value) {
+  value = std::clamp(value, 0.0, 1.0);
+  return value * value * (3.0 - 2.0 * value);
+}
+
 Layout compute_layout(int window_width, int window_height) {
   constexpr int margin = 24;
   constexpr int gap = 14;
@@ -411,16 +416,17 @@ void render_torn_edges(SDL_Renderer* renderer, const Rect& left, const Rect& rig
 void render_page_card(SDL_Renderer* renderer, TextureCache& cache, std::vector<Candidate>& candidates,
                       std::size_t index, double offset, const Rect& content, double focus_pulse,
                       double badge_pulse, double delete_slide, double tear_progress, double shake) {
-  const bool selected = std::abs(offset) < 0.15;
   const double distance = std::min(1.0, std::abs(offset));
-  const double scale = (selected ? 1.0 : 0.72 - 0.10 * distance) + (selected ? 0.018 * focus_pulse : 0.0);
+  const double focus = smoothstep(1.0 - distance);
+  const bool selected = focus > 0.72;
+  const double scale = 0.62 + 0.38 * focus + 0.018 * focus * focus_pulse;
   TextureEntry* texture = cache.peek(index);
   const double aspect =
       (texture != nullptr && texture->width > 0 && texture->height > 0)
           ? static_cast<double>(texture->width) / static_cast<double>(texture->height)
           : 0.70;
   const int max_height = std::max(220, content.h - 22);
-  const int max_width = std::max(210, static_cast<int>(content.w * (selected ? 0.56 : 0.34)));
+  const int max_width = std::max(210, static_cast<int>(content.w * (0.34 + 0.22 * focus)));
   int card_height = static_cast<int>(max_height * scale);
   int card_width = static_cast<int>(card_height * aspect);
   if (card_width > max_width) {
@@ -498,10 +504,10 @@ void render_page_card(SDL_Renderer* renderer, TextureCache& cache, std::vector<C
     return;
   }
 
-  SDL_Color backing = selected ? kPaper : SDL_Color{255, 239, 246, static_cast<Uint8>(230 - distance * 70)};
-  const int shadow_offset = selected ? 12 + static_cast<int>(4.0 * focus_pulse) : 8;
+  SDL_Color backing = mix(SDL_Color{255, 239, 246, static_cast<Uint8>(230 - distance * 70)}, kPaper, focus);
+  const int shadow_offset = static_cast<int>(8.0 + 4.0 * focus + 4.0 * focus * focus_pulse);
   fill(renderer, Rect{card.x + shadow_offset, card.y + shadow_offset, card.w, card.h},
-       SDL_Color{116, 62, 88, static_cast<Uint8>(selected ? 70 : 44)});
+       SDL_Color{116, 62, 88, static_cast<Uint8>(44 + 26 * focus)});
   fill(renderer, card, backing);
   outline(renderer, card, selected ? action_color(candidates[index].review_action) : SDL_Color{230, 190, 207, 255});
 
@@ -509,7 +515,7 @@ void render_page_card(SDL_Renderer* renderer, TextureCache& cache, std::vector<C
   if (texture != nullptr && texture->texture != nullptr) {
     const Rect destination = fit_image(texture->width, texture->height, image_bounds);
     SDL_Rect sdl_destination{destination.x, destination.y, destination.w, destination.h};
-    SDL_SetTextureAlphaMod(texture->texture, selected ? 255 : 165);
+    SDL_SetTextureAlphaMod(texture->texture, static_cast<Uint8>(165 + 90 * focus));
     SDL_RenderCopy(renderer, texture->texture, nullptr, &sdl_destination);
   } else {
     draw_centered_text(renderer, image_bounds, "LOADING", kMuted, selected ? 3 : 2);
@@ -523,9 +529,27 @@ void render_progress(SDL_Renderer* renderer, std::size_t index, std::size_t tota
     return;
   }
   const Rect track{rect.x, rect.y, rect.w, 6};
-  fill(renderer, track, SDL_Color{226, 195, 210, 255});
-  const int filled = static_cast<int>(track.w * (static_cast<double>(index + 1) / static_cast<double>(total)));
-  fill(renderer, Rect{track.x, track.y, filled, track.h}, kAccent);
+  fill(renderer, track, SDL_Color{226, 195, 210, 140});
+
+  const int gap = total <= static_cast<std::size_t>(track.w / 5) ? 2
+                  : total <= static_cast<std::size_t>(track.w / 3) ? 1
+                                                                   : 0;
+  for (std::size_t page = 0; page < total; ++page) {
+    const int x0 = track.x + static_cast<int>((static_cast<double>(page) / total) * track.w);
+    const int x1 = track.x + static_cast<int>((static_cast<double>(page + 1) / total) * track.w);
+    const int width = std::max(1, x1 - x0 - gap);
+    SDL_Color color = SDL_Color{226, 195, 210, 255};
+    int y = track.y;
+    int height = track.h;
+    if (page < index) {
+      color = kAccent;
+    } else if (page == index) {
+      color = kWarm;
+      y -= 2;
+      height += 4;
+    }
+    fill(renderer, Rect{x0, y, width, height}, color);
+  }
 }
 
 void render_button(SDL_Renderer* renderer, const Rect& rect, SDL_Color base, SDL_Color accent, const std::string& label,
@@ -852,7 +876,7 @@ bool review_candidates(std::vector<Candidate>& candidates) {
     if (press_timer <= 0.0) {
       pressed_button = ButtonId::None;
     }
-    const double easing = 1.0 - std::exp(-18.0 * delta_seconds);
+    const double easing = 1.0 - std::exp(-10.0 * delta_seconds);
     carousel_position += (static_cast<double>(selected_index) - carousel_position) * easing;
     if (std::abs(carousel_position - static_cast<double>(selected_index)) < 0.0001) {
       carousel_position = static_cast<double>(selected_index);
