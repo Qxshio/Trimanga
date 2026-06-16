@@ -305,9 +305,14 @@ class TextureCache {
   TextureCache& operator=(const TextureCache&) = delete;
 
   ~TextureCache() {
+    clear();
+  }
+
+  void clear() {
     for (TextureEntry& entry : entries_) {
       if (entry.texture != nullptr) {
         SDL_DestroyTexture(entry.texture);
+        entry = {};
       }
     }
   }
@@ -738,6 +743,17 @@ bool review_candidates(std::vector<Candidate>& candidates) {
     pressed_button = ButtonId::None;
     SDL_SetWindowTitle(window, "Review Detected Scanlations - confirming selection");
   };
+  auto close_preview_now = [&] {
+    if (!window_hidden) {
+      SDL_HideWindow(window);
+      window_hidden = true;
+      SDL_PumpEvents();
+    }
+    cache.clear();
+    SDL_DestroyRenderer(renderer);
+    SDL_DestroyWindow(window);
+    SDL_Quit();
+  };
 
   bool running = true;
   Uint64 last_tick = SDL_GetPerformanceCounter();
@@ -863,11 +879,8 @@ bool review_candidates(std::vector<Candidate>& candidates) {
     if (confirming) {
       confirm_time += delta_seconds;
       if (confirm_time >= 0.48) {
-        if (!window_hidden) {
-          SDL_HideWindow(window);
-          window_hidden = true;
-        }
-        running = false;
+        close_preview_now();
+        return true;
       }
     }
     focus_pulse = std::max(0.0, focus_pulse - delta_seconds * 4.8);
@@ -957,6 +970,7 @@ bool review_candidates(std::vector<Candidate>& candidates) {
   if (!window_hidden) {
     SDL_HideWindow(window);
   }
+  cache.clear();
   SDL_DestroyRenderer(renderer);
   SDL_DestroyWindow(window);
   SDL_Quit();
