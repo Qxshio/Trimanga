@@ -382,6 +382,13 @@ void render_manga_background(SDL_Renderer* renderer, int window_width, int windo
   line(renderer, 0, window_height - 172, window_width, window_height - 228, SDL_Color{255, 222, 233, 120});
 }
 
+void update_logical_render_size(SDL_Window* window, SDL_Renderer* renderer, int& window_width, int& window_height) {
+  SDL_GetWindowSize(window, &window_width, &window_height);
+  window_width = std::max(720, window_width);
+  window_height = std::max(540, window_height);
+  SDL_RenderSetLogicalSize(renderer, window_width, window_height);
+}
+
 }  // namespace
 
 bool review_candidates(std::vector<Candidate>& candidates) {
@@ -393,12 +400,14 @@ bool review_candidates(std::vector<Candidate>& candidates) {
   }
   SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "1");
 
-  SDL_Window* window = SDL_CreateWindow("Trimanga Review", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, 1220, 860,
-                                        SDL_WINDOW_RESIZABLE | SDL_WINDOW_ALLOW_HIGHDPI);
+  SDL_Window* window =
+      SDL_CreateWindow("Trimanga Review", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, 1220, 860,
+                       SDL_WINDOW_RESIZABLE);
   if (window == nullptr) {
     SDL_Quit();
     return false;
   }
+  SDL_SetWindowMinimumSize(window, 720, 540);
   SDL_Renderer* renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
   if (renderer == nullptr) {
     SDL_DestroyWindow(window);
@@ -494,21 +503,23 @@ bool review_candidates(std::vector<Candidate>& candidates) {
       } else if (event.type == SDL_MOUSEBUTTONDOWN && event.button.button == SDL_BUTTON_LEFT) {
         int window_width = 0;
         int window_height = 0;
-        SDL_GetWindowSize(window, &window_width, &window_height);
+        update_logical_render_size(window, renderer, window_width, window_height);
+        int mouse_x = event.button.x;
+        int mouse_y = event.button.y;
         const Rect delete_button{window_width / 2 - 315, window_height - 78, 190, 50};
         const Rect mark_all_button{window_width / 2 - 95, window_height - 78, 190, 50};
         const Rect clear_button{window_width / 2 + 125, window_height - 78, 190, 50};
         const Rect previous_hit{0, 80, window_width / 3, window_height - 190};
         const Rect next_hit{window_width * 2 / 3, 80, window_width / 3, window_height - 190};
-        if (delete_button.contains(event.button.x, event.button.y)) {
+        if (delete_button.contains(mouse_x, mouse_y)) {
           toggle_delete();
-        } else if (mark_all_button.contains(event.button.x, event.button.y)) {
+        } else if (mark_all_button.contains(mouse_x, mouse_y)) {
           mark_all_delete();
-        } else if (clear_button.contains(event.button.x, event.button.y)) {
+        } else if (clear_button.contains(mouse_x, mouse_y)) {
           clear_all_marks();
-        } else if (previous_hit.contains(event.button.x, event.button.y) && selected_index > 0) {
+        } else if (previous_hit.contains(mouse_x, mouse_y) && selected_index > 0) {
           select(selected_index - 1);
-        } else if (next_hit.contains(event.button.x, event.button.y) && selected_index + 1 < candidates.size()) {
+        } else if (next_hit.contains(mouse_x, mouse_y) && selected_index + 1 < candidates.size()) {
           select(selected_index + 1);
         }
       }
@@ -525,7 +536,7 @@ bool review_candidates(std::vector<Candidate>& candidates) {
 
     int window_width = 0;
     int window_height = 0;
-    SDL_GetWindowSize(window, &window_width, &window_height);
+    update_logical_render_size(window, renderer, window_width, window_height);
 
     render_manga_background(renderer, window_width, window_height);
     fill(renderer, Rect{0, 0, window_width, 84}, kPanel);
