@@ -431,9 +431,12 @@ void render_page_card(SDL_Renderer* renderer, TextureCache& cache, std::vector<C
   card_width = std::clamp(card_width, 170, max_width);
   const int shake_x = static_cast<int>(std::sin(shake * 92.0 + index * 1.7) * shake);
   const int shake_y = static_cast<int>(std::cos(shake * 79.0 + index * 2.1) * shake * 0.55);
-  const int delete_drop = static_cast<int>(std::round(delete_slide * (selected ? 22.0 : 15.0)));
+  const int base_top = content.y + (content.h - card_height) / 2 + static_cast<int>(distance * 18);
+  const int peek_height = std::clamp(static_cast<int>(card_height * (selected ? 0.16 : 0.14)), 42, 82);
+  const int deleted_top = content.y + content.h - peek_height;
+  const int delete_drop = static_cast<int>(std::round(delete_slide * std::max(0, deleted_top - base_top)));
   const int center_x = content.x + content.w / 2 + static_cast<int>(offset * std::min(390, content.w / 3)) + shake_x;
-  const int top = content.y + (content.h - card_height) / 2 + static_cast<int>(distance * 18) + delete_drop + shake_y;
+  const int top = base_top + delete_drop + shake_y;
   const Rect card{center_x - card_width / 2, top, card_width, card_height};
 
   const double tear = ease_out(tear_progress);
@@ -905,12 +908,13 @@ bool review_candidates(std::vector<Candidate>& candidates) {
       render_page_card(renderer, cache, candidates, static_cast<std::size_t>(candidate_index),
                        visual_offset, layout.content,
                        ease_out(focus_pulse) * content_alpha, ease_out(badge_pulse) * content_alpha,
-                       delete_slides[static_cast<std::size_t>(candidate_index)], tear_progress, shake);
+                       delete_slides[static_cast<std::size_t>(candidate_index)], tear_progress,
+                       shake * delete_slides[static_cast<std::size_t>(candidate_index)]);
     }
     const double active_offset = (static_cast<double>(selected_index) - carousel_position) * (1.0 - gather_progress);
     render_page_card(renderer, cache, candidates, selected_index, active_offset, layout.content,
                      ease_out(focus_pulse) * content_alpha, ease_out(badge_pulse) * content_alpha,
-                     delete_slides[selected_index], tear_progress, shake);
+                     delete_slides[selected_index], tear_progress, shake * delete_slides[selected_index]);
 
     const Rect progress{layout.action.x + 18, layout.action.y + 12, layout.action.w - 36, 6};
     render_action_area(renderer, layout.action, delete_button, toggle_all_button, candidates[selected_index].review_action,
