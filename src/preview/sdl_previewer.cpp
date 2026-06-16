@@ -5,19 +5,30 @@
 #include <SDL.h>
 
 #include <algorithm>
+#include <chrono>
 #include <cmath>
 #include <cstdint>
+#include <filesystem>
+#include <fstream>
+#include <random>
+#include <string>
 #include <vector>
 
 #if defined(__APPLE__)
-#include <sys/types.h>
+#include <mach-o/dyld.h>
+#include <spawn.h>
 #include <sys/wait.h>
-#include <unistd.h>
+
+extern char** environ;
 #endif
 
 namespace trimanga {
 
 namespace {
+
+namespace fs = std::filesystem;
+
+constexpr std::uint32_t kPreviewFileVersion = 1;
 
 bool run_review_window(std::vector<Candidate>& candidates) {
   using namespace preview;
@@ -340,30 +351,6 @@ bool run_review_window(std::vector<Candidate>& candidates) {
 }
 
 #if defined(__APPLE__)
-bool read_all(int fd, std::uint8_t* data, std::size_t size) {
-  std::size_t offset = 0;
-  while (offset < size) {
-    const ssize_t count = read(fd, data + offset, size - offset);
-    if (count <= 0) {
-      return false;
-    }
-    offset += static_cast<std::size_t>(count);
-  }
-  return true;
-}
-
-bool write_all(int fd, const std::uint8_t* data, std::size_t size) {
-  std::size_t offset = 0;
-  while (offset < size) {
-    const ssize_t count = write(fd, data + offset, size - offset);
-    if (count <= 0) {
-      return false;
-    }
-    offset += static_cast<std::size_t>(count);
-  }
-  return true;
-}
-
 std::uint8_t encode_action(ReviewAction action) {
   return action == ReviewAction::Delete ? 1 : 0;
 }
@@ -372,48 +359,158 @@ ReviewAction decode_action(std::uint8_t value) {
   return value == 1 ? ReviewAction::Delete : ReviewAction::Undecided;
 }
 
-bool review_candidates_in_child_process(std::vector<Candidate>& candidates) {
-  int pipe_fds[2] = {-1, -1};
-  if (pipe(pipe_fds) != 0) {
-    return run_review_window(candidates);
-  }
+template <typename T>
+void write_value(std::ostream& output, const T& value) {
+  output.write(reinterpret_cast<const char*>(&value), sizeof(T));
+}
 
-  const pid_t pid = fork();
-  if (pid < 0) {
-    close(pipe_fds[0]);
-    close(pipe_fds[1]);
-    return run_review_window(candidates);
-  }
+template <typename T>
+bool read_value(std::istream& input, T& value) {
+  input.read(reinterpret_cast<char*>(&value), sizeof(T));
+  return static_cast<bool>(input);
+}
 
-  if (pid == 0) {
-    close(pipe_fds[0]);
-    const bool reviewed = run_review_window(candidates);
-    std::vector<std::uint8_t> payload(candidates.size() + 1, 0);
-    payload[0] = reviewed ? 1 : 0;
-    for (std::size_t index = 0; index < candidates.size(); ++index) {
-      payload[index + 1] = encode_action(candidates[index].review_action);
+void write_string(std::ostream& output, const std::string& value) {
+  const auto size = static_cast<std::uint64_t>(value.size());
+  write_value(output, size);
+  output.write(value.data(), static_cast<std::streamsize>(value.size()));
+}
+
+bool read_string(std::istream& input, std::string& value) {
+  std::uint64_t size = 0;
+  if (!read_value(input, size) || size > 1024 * 1024) {
+    return false;
+  }
+  value.assign(static_cast<std::size_t>(size), '\0');
+  input.read(value.data(), static_cast<std::streamsize>(size));
+  return static_cast<bool>(input);
+}
+
+fs::path unique_preview_path(const std::string& suffix) {
+  const auto stamp = std::chrono::steady_clock::now().time_since_epoch().count();
+  std::random_device random;
+  return fs::temp_directory_path() /
+         ("trimanga-preview-" + std::to_string(stamp) + "-" + std::to_string(random()) + suffix);
+}
+
+bool write_preview_input(const fs::path& path, const std::vector<Candidate>& candidates) {
+  std::ofstream output(path, std::ios::binary);
+  if (!output) {
+    return false;
+  }
+  write_value(output, kPreviewFileVersion);
+  const auto count = static_cast<std::uint64_t>(candidates.size());
+  write_value(output, count);
+  for (const Candidate& candidate : candidates) {
+    write_string(output, candidate.page.image_path.string());
+    write_string(output, candidate.page.archive_name);
+    write_value(output, encode_action(candidate.review_action));
+  }
+  return static_cast<bool>(output);
+}
+
+bool read_preview_input(const fs::path& path, std::vector<Candidate>& candidates) {
+  std::ifstream input(path, std::ios::binary);
+  std::uint32_t version = 0;
+  std::uint64_t count = 0;
+  if (!input || !read_value(input, version) || version != kPreviewFileVersion || !read_value(input, count)) {
+    return false;
+  }
+  candidates.assign(static_cast<std::size_t>(count), Candidate{});
+  for (Candidate& candidate : candidates) {
+    std::string image_path;
+    std::string archive_name;
+    std::uint8_t action = 0;
+    if (!read_string(input, image_path) || !read_string(input, archive_name) || !read_value(input, action)) {
+      return false;
     }
-    const bool wrote = write_all(pipe_fds[1], payload.data(), payload.size());
-    close(pipe_fds[1]);
-    _exit(wrote ? 0 : 2);
+    candidate.page.image_path = fs::path(image_path);
+    candidate.page.archive_name = archive_name;
+    candidate.review_action = decode_action(action);
+  }
+  return true;
+}
+
+bool write_preview_output(const fs::path& path, bool reviewed, const std::vector<Candidate>& candidates) {
+  std::ofstream output(path, std::ios::binary);
+  if (!output) {
+    return false;
+  }
+  write_value(output, kPreviewFileVersion);
+  write_value(output, static_cast<std::uint8_t>(reviewed ? 1 : 0));
+  const auto count = static_cast<std::uint64_t>(candidates.size());
+  write_value(output, count);
+  for (const Candidate& candidate : candidates) {
+    write_value(output, encode_action(candidate.review_action));
+  }
+  return static_cast<bool>(output);
+}
+
+bool read_preview_output(const fs::path& path, std::vector<Candidate>& candidates) {
+  std::ifstream input(path, std::ios::binary);
+  std::uint32_t version = 0;
+  std::uint8_t reviewed = 0;
+  std::uint64_t count = 0;
+  if (!input || !read_value(input, version) || version != kPreviewFileVersion || !read_value(input, reviewed) ||
+      !read_value(input, count) || count != candidates.size() || reviewed == 0) {
+    return false;
+  }
+  for (Candidate& candidate : candidates) {
+    std::uint8_t action = 0;
+    if (!read_value(input, action)) {
+      return false;
+    }
+    candidate.review_action = decode_action(action);
+  }
+  return true;
+}
+
+fs::path executable_path() {
+  std::vector<char> buffer(4096);
+  uint32_t size = static_cast<uint32_t>(buffer.size());
+  if (_NSGetExecutablePath(buffer.data(), &size) != 0) {
+    buffer.assign(size + 1, '\0');
+    if (_NSGetExecutablePath(buffer.data(), &size) != 0) {
+      return {};
+    }
+  }
+  return fs::weakly_canonical(fs::path(buffer.data()));
+}
+
+bool review_candidates_in_helper_process(std::vector<Candidate>& candidates) {
+  const fs::path executable = executable_path();
+  if (executable.empty()) {
+    return run_review_window(candidates);
   }
 
-  close(pipe_fds[1]);
-  std::vector<std::uint8_t> payload(candidates.size() + 1, 0);
-  const bool read_ok = read_all(pipe_fds[0], payload.data(), payload.size());
-  close(pipe_fds[0]);
+  const fs::path input_path = unique_preview_path(".in");
+  const fs::path output_path = unique_preview_path(".out");
+  if (!write_preview_input(input_path, candidates)) {
+    return false;
+  }
+
+  std::string executable_string = executable.string();
+  std::string input_string = input_path.string();
+  std::string output_string = output_path.string();
+  char* const argv[] = {executable_string.data(), const_cast<char*>("--preview-helper"), input_string.data(),
+                        output_string.data(), nullptr};
+
+  pid_t pid = 0;
+  const int spawn_result = posix_spawn(&pid, executable_string.c_str(), nullptr, nullptr, argv, environ);
+  if (spawn_result != 0) {
+    std::error_code ignored;
+    fs::remove(input_path, ignored);
+    return run_review_window(candidates);
+  }
 
   int status = 0;
   while (waitpid(pid, &status, 0) < 0) {
   }
-  if (!read_ok || !WIFEXITED(status) || WEXITSTATUS(status) != 0 || payload[0] == 0) {
-    return false;
-  }
-
-  for (std::size_t index = 0; index < candidates.size(); ++index) {
-    candidates[index].review_action = decode_action(payload[index + 1]);
-  }
-  return true;
+  const bool ok = WIFEXITED(status) && WEXITSTATUS(status) == 0 && read_preview_output(output_path, candidates);
+  std::error_code ignored;
+  fs::remove(input_path, ignored);
+  fs::remove(output_path, ignored);
+  return ok;
 }
 #endif
 
@@ -421,9 +518,27 @@ bool review_candidates_in_child_process(std::vector<Candidate>& candidates) {
 
 bool review_candidates(std::vector<Candidate>& candidates) {
 #if defined(__APPLE__)
-  return review_candidates_in_child_process(candidates);
+  return review_candidates_in_helper_process(candidates);
 #else
   return run_review_window(candidates);
+#endif
+}
+
+int run_preview_helper(const std::filesystem::path& input_path, const std::filesystem::path& output_path) {
+#if defined(__APPLE__)
+  std::vector<Candidate> candidates;
+  if (!read_preview_input(input_path, candidates)) {
+    return 2;
+  }
+  const bool reviewed = run_review_window(candidates);
+  if (!write_preview_output(output_path, reviewed, candidates)) {
+    return 3;
+  }
+  return reviewed ? 0 : 4;
+#else
+  (void)input_path;
+  (void)output_path;
+  return 2;
 #endif
 }
 

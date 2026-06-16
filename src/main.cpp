@@ -1,4 +1,5 @@
 #include "trimanga/scanner.hpp"
+#include "trimanga/previewer.hpp"
 
 #include <algorithm>
 #include <cstdlib>
@@ -82,6 +83,12 @@ int main(int argc, char** argv) {
     if (std::string(argv[1]) == "--version") {
       std::cout << "Trimanga 0.1.0\n";
       return 0;
+    }
+    if (std::string(argv[1]) == "--preview-helper") {
+      if (argc != 4) {
+        return 2;
+      }
+      return trimanga::run_preview_helper(fs::path(argv[2]), fs::path(argv[3]));
     }
     if (std::string(argv[1]) != "scan") {
       throw std::runtime_error("unknown command: " + std::string(argv[1]));
