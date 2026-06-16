@@ -11,10 +11,7 @@
 
 namespace trimanga {
 
-namespace {
-
-
-bool run_review_window(std::vector<Candidate>& candidates) {
+bool run_sdl_review_window(std::vector<Candidate>& candidates) {
   using namespace preview;
 
   if (candidates.empty()) {
@@ -98,12 +95,15 @@ bool run_review_window(std::vector<Candidate>& candidates) {
       return;
     }
     window_closed = true;
+    cache.clear();
+    if (renderer != nullptr) {
+      SDL_DestroyRenderer(renderer);
+      renderer = nullptr;
+    }
     if (window != nullptr) {
       SDL_DestroyWindow(window);
       window = nullptr;
     }
-    renderer = nullptr;
-    cache.release();
     SDL_QuitSubSystem(SDL_INIT_VIDEO);
     SDL_Quit();
   };
@@ -322,12 +322,6 @@ bool run_review_window(std::vector<Candidate>& candidates) {
 
   close_preview_now();
   return true;
-}
-
-}  // namespace
-
-bool review_candidates(std::vector<Candidate>& candidates) {
-  return run_review_window(candidates);
 }
 
 }  // namespace trimanga

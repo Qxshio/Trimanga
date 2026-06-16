@@ -17,14 +17,7 @@ set(TRIMANGA_PREVIEW_SOURCE src/preview/previewer_stub.cpp)
 if(TRIMANGA_WITH_SDL)
   find_package(SDL2 QUIET)
   if(SDL2_FOUND)
-    set(TRIMANGA_PREVIEW_SOURCE
-      src/preview/sdl_previewer.cpp
-      src/preview/sdl/drawing.cpp
-      src/preview/sdl/layout.cpp
-      src/preview/sdl/page_card.cpp
-      src/preview/sdl/texture_cache.cpp
-      src/preview/sdl/widgets.cpp
-    )
+    set(TRIMANGA_PREVIEW_SOURCE src/preview/previewer_spawn.cpp src/preview/preview_ipc.cpp)
   endif()
 endif()
 
@@ -47,9 +40,20 @@ add_executable(trimanga
 target_include_directories(trimanga PRIVATE include third_party/stb third_party/miniz)
 
 if(TRIMANGA_WITH_SDL AND SDL2_FOUND)
-  target_compile_definitions(trimanga PRIVATE TRIMANGA_WITH_SDL=1)
-  target_include_directories(trimanga PRIVATE ${SDL2_INCLUDE_DIRS})
-  target_link_libraries(trimanga PRIVATE ${SDL2_LIBRARIES})
+  add_executable(trimanga-preview
+    src/preview/sdl_preview_main.cpp
+    src/preview/sdl_previewer.cpp
+    src/preview/preview_ipc.cpp
+    src/image/image_loader.cpp
+    src/preview/sdl/drawing.cpp
+    src/preview/sdl/layout.cpp
+    src/preview/sdl/page_card.cpp
+    src/preview/sdl/texture_cache.cpp
+    src/preview/sdl/widgets.cpp
+  )
+  target_compile_definitions(trimanga-preview PRIVATE TRIMANGA_WITH_SDL=1)
+  target_include_directories(trimanga-preview PRIVATE include third_party/stb ${SDL2_INCLUDE_DIRS})
+  target_link_libraries(trimanga-preview PRIVATE ${SDL2_LIBRARIES})
 endif()
 
 if(MSVC)

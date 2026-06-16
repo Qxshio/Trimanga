@@ -2,6 +2,7 @@ CXX ?= clang++
 CC ?= cc
 BUILD_DIR ?= build
 TARGET := $(BUILD_DIR)/trimanga
+PREVIEW_TARGET := $(BUILD_DIR)/trimanga-preview
 UNAME_S := $(shell uname -s)
 
 SDL_CFLAGS := $(shell sdl2-config --cflags 2>/dev/null)
@@ -10,23 +11,27 @@ SDL_PREFIX := $(shell sdl2-config --prefix 2>/dev/null)
 SDL_DYLIB := $(firstword $(wildcard $(SDL_PREFIX)/lib/libSDL2-2.0.0.dylib) $(wildcard $(SDL_PREFIX)/lib/libSDL2.dylib))
 ifeq ($(strip $(SDL_LIBS)),)
 PREVIEW_SOURCE := src/preview/previewer_stub.cpp
-PREVIEW_CXXFLAGS :=
-PREVIEW_LDFLAGS :=
+PREVIEW_TARGETS :=
 else
-PREVIEW_SOURCE := \
+PREVIEW_SOURCE := src/preview/previewer_spawn.cpp src/preview/preview_ipc.cpp
+PREVIEW_HELPER_SOURCES := \
+	src/preview/sdl_preview_main.cpp \
 	src/preview/sdl_previewer.cpp \
+	src/preview/preview_ipc.cpp \
+	src/image/image_loader.cpp \
 	src/preview/sdl/drawing.cpp \
 	src/preview/sdl/layout.cpp \
 	src/preview/sdl/page_card.cpp \
 	src/preview/sdl/texture_cache.cpp \
 	src/preview/sdl/widgets.cpp
-PREVIEW_CXXFLAGS := $(SDL_CFLAGS) -DTRIMANGA_WITH_SDL=1
-PREVIEW_LDFLAGS := $(SDL_LIBS)
+PREVIEW_TARGETS := $(PREVIEW_TARGET)
 endif
 
 CFLAGS ?= -Wall -Wextra -Ithird_party/miniz
-CXXFLAGS ?= -std=c++20 -Wall -Wextra -Wpedantic -Iinclude -Ithird_party/stb -Ithird_party/miniz $(PREVIEW_CXXFLAGS)
-LDFLAGS ?= $(PREVIEW_LDFLAGS)
+CXXFLAGS ?= -std=c++20 -Wall -Wextra -Wpedantic -Iinclude -Ithird_party/stb -Ithird_party/miniz
+PREVIEW_CXXFLAGS ?= $(CXXFLAGS) $(SDL_CFLAGS) -DTRIMANGA_WITH_SDL=1
+LDFLAGS ?=
+PREVIEW_LDFLAGS ?= $(SDL_LIBS)
 
 SOURCES := \
 	src/main.cpp \
@@ -48,12 +53,17 @@ THIRD_PARTY_C_SOURCES := \
 OBJECTS := $(patsubst src/%,$(BUILD_DIR)/%.o,$(SOURCES)) \
 	$(patsubst third_party/%,$(BUILD_DIR)/third_party/%.o,$(THIRD_PARTY_C_SOURCES))
 
+PREVIEW_HELPER_OBJECTS := $(patsubst src/%,$(BUILD_DIR)/%.o,$(PREVIEW_HELPER_SOURCES))
+
 .PHONY: all clean
 
-all: $(TARGET)
+all: $(TARGET) $(PREVIEW_TARGETS)
 
 $(TARGET): $(OBJECTS)
 	$(CXX) $(OBJECTS) $(LDFLAGS) -o $@
+
+$(PREVIEW_TARGET): $(PREVIEW_HELPER_OBJECTS)
+	$(CXX) $(PREVIEW_HELPER_OBJECTS) $(PREVIEW_LDFLAGS) -o $@
 ifeq ($(UNAME_S),Darwin)
 ifneq ($(strip $(SDL_DYLIB)),)
 	@mkdir -p $(BUILD_DIR)/lib
@@ -71,6 +81,18 @@ $(BUILD_DIR)/%.cpp.o: src/%.cpp
 $(BUILD_DIR)/%.mm.o: src/%.mm
 	@mkdir -p $(dir $@)
 	$(CXX) $(CXXFLAGS) -x objective-c++ -c $< -o $@
+
+$(BUILD_DIR)/preview/sdl_preview_main.cpp.o: src/preview/sdl_preview_main.cpp
+	@mkdir -p $(dir $@)
+	$(CXX) $(PREVIEW_CXXFLAGS) -c $< -o $@
+
+$(BUILD_DIR)/preview/sdl_previewer.cpp.o: src/preview/sdl_previewer.cpp
+	@mkdir -p $(dir $@)
+	$(CXX) $(PREVIEW_CXXFLAGS) -c $< -o $@
+
+$(BUILD_DIR)/preview/sdl/%.cpp.o: src/preview/sdl/%.cpp
+	@mkdir -p $(dir $@)
+	$(CXX) $(PREVIEW_CXXFLAGS) -c $< -o $@
 
 $(BUILD_DIR)/third_party/%.c.o: third_party/%.c
 	@mkdir -p $(dir $@)
