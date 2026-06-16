@@ -3,7 +3,7 @@ cmake_minimum_required(VERSION 3.22)
 project(trimanga
   VERSION 0.1.0
   DESCRIPTION "Production-grade manga archive cleanup tool for detecting removable scanlation and ad pages"
-  LANGUAGES CXX
+  LANGUAGES C CXX
 )
 
 set(CMAKE_CXX_STANDARD 20)
@@ -30,10 +30,14 @@ add_executable(trimanga
   src/process.cpp
   src/scanner.cpp
   src/detectors/scanlation_detector.cpp
+  third_party/miniz/miniz.c
+  third_party/miniz/miniz_tdef.c
+  third_party/miniz/miniz_tinfl.c
+  third_party/miniz/miniz_zip.c
   ${TRIMANGA_PREVIEW_SOURCE}
 )
 
-target_include_directories(trimanga PRIVATE include third_party/stb)
+target_include_directories(trimanga PRIVATE include third_party/stb third_party/miniz)
 
 if(TRIMANGA_WITH_SDL AND SDL2_FOUND)
   target_compile_definitions(trimanga PRIVATE TRIMANGA_WITH_SDL=1)
@@ -73,8 +77,6 @@ elseif(APPLE)
   set(CPACK_GENERATOR "TGZ")
 else()
   set(CPACK_GENERATOR "TGZ;DEB;RPM")
-  set(CPACK_DEBIAN_PACKAGE_DEPENDS "unzip, zip")
-  set(CPACK_RPM_PACKAGE_REQUIRES "unzip, zip")
 endif()
 
 include(CPack)

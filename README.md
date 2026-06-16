@@ -59,33 +59,30 @@ Supported image types:
 
 - Apple Clang or Xcode Command Line Tools
 - CMake 3.22+ recommended
-- `unzip` or `7z` for archive extraction
-- `zip` or `7z` for archive rebuilding
 - SDL2, optional, for the graphical previewer
 
 ```sh
 xcode-select --install
-brew install cmake unzip zip sdl2
+brew install cmake sdl2
 ```
 
 ### Linux
 
 - CMake 3.22+
 - C++20 compiler such as GCC 11+ or Clang 14+
-- `unzip` or `7z`
 - SDL2 development headers, optional, for the graphical previewer
 
 Debian/Ubuntu:
 
 ```sh
 sudo apt-get update
-sudo apt-get install -y cmake g++ unzip zip libsdl2-dev
+sudo apt-get install -y cmake g++ libsdl2-dev
 ```
 
 Fedora:
 
 ```sh
-sudo dnf install cmake gcc-c++ unzip zip SDL2-devel
+sudo dnf install cmake gcc-c++ SDL2-devel
 ```
 
 ### Windows
@@ -171,6 +168,8 @@ The default table output is intentionally compact. Use `--details` when you want
 Use `--timings` to see where time is spent across extraction, page profiling, page analysis, visual matching and review export.
 Use `--progress` or `--verbose` when you want live scan feedback.
 Use `--preview` when you want to inspect every candidate image immediately. The preview opens as a carousel: mouse wheel, arrow keys, or `H/J/K/L` move through matches; unmarked pages are kept by default; `Space`, `X`, or `D` toggles the delete mark; `T` or `A` toggles all candidates between delete and keep; hold `Esc` to confirm. Folder and single-image inputs move deleted files into `.trimanga-trash`. `.cbz` and `.zip` inputs are rebuilt with marked pages removed.
+Archive support is built into Trimanga, so `.cbz` and `.zip` scanning/rebuilding does not require system `zip`, `unzip`, `7z`, or PowerShell archive commands.
+On macOS, the Make build copies the SDL preview runtime into `build/lib` and rewrites `build/trimanga` to load that local copy, so the built preview binary does not depend on Homebrew's SDL path at runtime.
 
 Speed controls how aggressively Trimanga creates workers:
 

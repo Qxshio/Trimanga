@@ -1,13 +1,12 @@
 #include "trimanga/file_utils.hpp"
 
-#include "trimanga/process.hpp"
+#include "miniz.h"
 
 #include <algorithm>
 #include <cctype>
 #include <chrono>
 #include <filesystem>
 #include <random>
-#include <sstream>
 #include <stdexcept>
 #include <string>
 
@@ -25,20 +24,33 @@ std::string lower_ext(const fs::path& path) {
   return ext;
 }
 
-#if defined(_WIN32)
-std::string powershell_quote(const std::string& value) {
-  std::string quoted = "'";
-  for (char ch : value) {
-    if (ch == '\'') {
-      quoted += "''";
-    } else {
-      quoted += ch;
+std::string zip_error_message(const std::string& action, const mz_zip_archive& archive) {
+  return action + ": " + mz_zip_get_error_string(mz_zip_peek_last_error(const_cast<mz_zip_archive*>(&archive)));
+}
+
+bool is_safe_archive_name(const std::string& name) {
+  if (name.empty() || name.front() == '/' || name.front() == '\\') {
+    return false;
+  }
+  fs::path path{name};
+  for (const auto& part : path) {
+    if (part == "..") {
+      return false;
     }
   }
-  quoted += "'";
-  return quoted;
+  return true;
 }
-#endif
+
+std::vector<fs::path> archive_files_recursive(const fs::path& root) {
+  std::vector<fs::path> files;
+  for (const auto& entry : fs::recursive_directory_iterator(root)) {
+    if (entry.is_regular_file()) {
+      files.push_back(entry.path());
+    }
+  }
+  std::sort(files.begin(), files.end());
+  return files;
+}
 
 }  // namespace
 
@@ -86,27 +98,40 @@ void copy_file_create_dirs(const fs::path& from, const fs::path& to) {
 
 std::vector<fs::path> extract_cbz(const fs::path& cbz, const fs::path& destination) {
   fs::create_directories(destination);
-  ProcessResult result;
-#if defined(_WIN32)
-  fs::path zip_copy = destination / "_archive.zip";
-  fs::copy_file(cbz, zip_copy, fs::copy_options::overwrite_existing);
-  result = run_process({"powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command",
-                        "Expand-Archive -LiteralPath " + powershell_quote(zip_copy.string()) +
-                            " -DestinationPath " + powershell_quote(destination.string()) + " -Force"});
-  std::error_code ignored;
-  fs::remove(zip_copy, ignored);
-#else
-  if (command_exists("unzip")) {
-    result = run_process({"unzip", "-qq", "-o", cbz.string(), "-d", destination.string()});
-  } else if (command_exists("7z")) {
-    result = run_process({"7z", "x", "-y", "-o" + destination.string(), cbz.string()});
-  } else {
-    throw std::runtime_error("archive extraction requires unzip or 7z");
+
+  mz_zip_archive archive{};
+  if (!mz_zip_reader_init_file(&archive, cbz.string().c_str(), 0)) {
+    throw std::runtime_error(zip_error_message("failed to open archive", archive));
   }
-#endif
-  if (result.exit_code != 0) {
-    throw std::runtime_error("failed to extract archive: " + cbz.string());
+
+  const mz_uint file_count = mz_zip_reader_get_num_files(&archive);
+  for (mz_uint index = 0; index < file_count; ++index) {
+    mz_zip_archive_file_stat stat{};
+    if (!mz_zip_reader_file_stat(&archive, index, &stat)) {
+      mz_zip_reader_end(&archive);
+      throw std::runtime_error(zip_error_message("failed to read archive entry", archive));
+    }
+
+    const std::string archive_name = stat.m_filename;
+    if (!is_safe_archive_name(archive_name)) {
+      mz_zip_reader_end(&archive);
+      throw std::runtime_error("archive contains an unsafe path: " + archive_name);
+    }
+
+    fs::path output = destination / fs::path(archive_name);
+    if (mz_zip_reader_is_file_a_directory(&archive, index)) {
+      fs::create_directories(output);
+      continue;
+    }
+
+    fs::create_directories(output.parent_path());
+    if (!mz_zip_reader_extract_to_file(&archive, index, output.string().c_str(), 0)) {
+      mz_zip_reader_end(&archive);
+      throw std::runtime_error(zip_error_message("failed to extract archive entry", archive));
+    }
   }
+
+  mz_zip_reader_end(&archive);
   return list_images_recursive(destination);
 }
 
@@ -120,30 +145,29 @@ void replace_archive_from_directory(const fs::path& source_dir, const fs::path& 
   std::error_code ignored;
   fs::remove(temp_archive, ignored);
 
-  ProcessResult result;
-#if defined(_WIN32)
-  result = run_process({"powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command",
-                        "Compress-Archive -Path " + powershell_quote((source_dir / "*").string()) +
-                            " -DestinationPath " + powershell_quote(temp_archive.string()) + " -Force"});
-#else
-  if (command_exists("zip")) {
-    std::ostringstream command;
-    command << "cd " << shell_quote(source_dir.string()) << " && zip -qr " << shell_quote(temp_archive.string()) << " .";
-    result = run_process({"sh", "-c", command.str()});
-  } else if (command_exists("7z")) {
-    std::ostringstream command;
-    command << "cd " << shell_quote(source_dir.string()) << " && 7z a -tzip -bd -y "
-            << shell_quote(temp_archive.string()) << " .";
-    result = run_process({"sh", "-c", command.str()});
-  } else {
-    throw std::runtime_error("archive rebuild requires zip or 7z");
+  mz_zip_archive archive{};
+  if (!mz_zip_writer_init_file(&archive, temp_archive.string().c_str(), 0)) {
+    throw std::runtime_error(zip_error_message("failed to create archive", archive));
   }
-#endif
 
-  if (result.exit_code != 0 || !fs::exists(temp_archive)) {
-    fs::remove(temp_archive, ignored);
-    throw std::runtime_error("failed to rebuild archive: " + archive_path.string());
+  for (const fs::path& file : archive_files_recursive(source_dir)) {
+    const std::string archive_name = fs::relative(file, source_dir).generic_string();
+    if (!mz_zip_writer_add_file(&archive, archive_name.c_str(), file.string().c_str(), nullptr, 0,
+                                MZ_BEST_SPEED)) {
+      const std::string message = zip_error_message("failed to add archive entry", archive);
+      mz_zip_writer_end(&archive);
+      fs::remove(temp_archive, ignored);
+      throw std::runtime_error(message);
+    }
   }
+
+  if (!mz_zip_writer_finalize_archive(&archive)) {
+    const std::string message = zip_error_message("failed to finalize archive", archive);
+    mz_zip_writer_end(&archive);
+    fs::remove(temp_archive, ignored);
+    throw std::runtime_error(message);
+  }
+  mz_zip_writer_end(&archive);
 
   fs::path backup = archive_path;
   backup += ".trimanga-bak";
