@@ -298,12 +298,11 @@ fs::path review_trash_root(const fs::path& input) {
 
 void apply_review_actions(ScanResult& result, const fs::path& input) {
   for (const Candidate& candidate : result.candidates) {
-    if (candidate.review_action == ReviewAction::Keep) {
-      ++result.marked_keep;
-    } else if (candidate.review_action == ReviewAction::Delete) {
+    if (candidate.review_action == ReviewAction::Delete) {
       ++result.marked_delete;
     }
   }
+  result.marked_keep = result.candidates.size() - result.marked_delete;
 
   if (result.archive_input || result.marked_delete == 0) {
     return;
@@ -484,9 +483,9 @@ std::string review_action_name(ReviewAction action) {
     case ReviewAction::Delete:
       return "delete";
     case ReviewAction::Undecided:
-      return "undecided";
+      return "keep";
   }
-  return "undecided";
+  return "keep";
 }
 
 int worker_count_for(ScanSpeed speed, std::size_t page_count) {

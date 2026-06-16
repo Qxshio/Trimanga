@@ -169,7 +169,7 @@ Options:
 The default table output is intentionally compact. Use `--details` when you want to inspect the detector signals that caused each page to be flagged.
 Use `--timings` to see where time is spent across extraction, page profiling, page analysis, visual matching and review export.
 Use `--progress` or `--verbose` when you want live scan feedback.
-Use `--preview` when you want to inspect every candidate image immediately. The preview opens as a carousel: mouse wheel, arrow keys, or `H/J/K/L` move through matches; the check button, `Enter`, or `Y` keeps a page; the `X` button, `X`, or `D` marks it for deletion. Folder and single-image inputs move deleted files into `.trimanga-trash`. Archive inputs are reviewed without modifying the archive.
+Use `--preview` when you want to inspect every candidate image immediately. The preview opens as a carousel: mouse wheel, arrow keys, or `H/J/K/L` move through matches; unmarked pages are kept by default; `Space`, `X`, or `D` toggles the delete mark; `A` marks all candidates for deletion; `C` clears all marks. Folder and single-image inputs move deleted files into `.trimanga-trash`. Archive inputs are reviewed without modifying the archive.
 
 Speed controls how aggressively Trimanga creates workers:
 

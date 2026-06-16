@@ -33,18 +33,18 @@ struct TextureEntry {
   int height = 0;
 };
 
-constexpr SDL_Color kCanvas{13, 15, 19, 255};
-constexpr SDL_Color kPanel{24, 27, 33, 255};
-constexpr SDL_Color kPanelSoft{31, 35, 42, 255};
-constexpr SDL_Color kStroke{67, 74, 86, 255};
-constexpr SDL_Color kMuted{139, 146, 158, 255};
-constexpr SDL_Color kText{235, 238, 242, 255};
-constexpr SDL_Color kKeep{70, 190, 122, 255};
-constexpr SDL_Color kKeepSoft{37, 92, 61, 255};
-constexpr SDL_Color kDelete{229, 89, 89, 255};
-constexpr SDL_Color kDeleteSoft{105, 47, 50, 255};
-constexpr SDL_Color kAccent{129, 167, 255, 255};
-constexpr SDL_Color kWarm{229, 178, 95, 255};
+constexpr SDL_Color kCanvas{255, 247, 250, 255};
+constexpr SDL_Color kPaper{255, 252, 246, 255};
+constexpr SDL_Color kPanel{48, 42, 61, 255};
+constexpr SDL_Color kStroke{219, 166, 190, 255};
+constexpr SDL_Color kMuted{126, 103, 119, 255};
+constexpr SDL_Color kText{54, 43, 60, 255};
+constexpr SDL_Color kLightText{255, 250, 252, 255};
+constexpr SDL_Color kDelete{224, 77, 105, 255};
+constexpr SDL_Color kDeleteSoft{255, 222, 229, 255};
+constexpr SDL_Color kAccent{62, 174, 195, 255};
+constexpr SDL_Color kAccentSoft{216, 247, 250, 255};
+constexpr SDL_Color kWarm{246, 177, 91, 255};
 
 void set_color(SDL_Renderer* renderer, SDL_Color color) {
   SDL_SetRenderDrawColor(renderer, color.r, color.g, color.b, color.a);
@@ -181,9 +181,9 @@ std::string action_name(ReviewAction action) {
     case ReviewAction::Delete:
       return "Delete";
     case ReviewAction::Undecided:
-      return "Review";
+      return "Keep";
   }
-  return "Review";
+  return "Keep";
 }
 
 SDL_Texture* load_texture(SDL_Renderer* renderer, const std::filesystem::path& path, int& width, int& height) {
@@ -231,6 +231,22 @@ class TextureCache {
     return entry;
   }
 
+  TextureEntry* peek(std::size_t index) {
+    if (index >= entries_.size() || entries_[index].texture == nullptr) {
+      return nullptr;
+    }
+    return &entries_[index];
+  }
+
+  void preload_near(std::size_t center, std::size_t radius) {
+    const std::size_t start = center > radius ? center - radius : 0;
+    const std::size_t end = std::min(entries_.size(), center + radius + 1);
+    for (std::size_t index = start; index < end; ++index) {
+      get(index);
+    }
+    keep_near(center, radius + 3);
+  }
+
   void keep_near(std::size_t center, std::size_t radius) {
     for (std::size_t index = 0; index < entries_.size(); ++index) {
       const std::size_t distance = index > center ? index - center : center - index;
@@ -263,63 +279,74 @@ void update_title(SDL_Window* window, const Candidate& candidate, std::size_t in
   std::ostringstream title;
   title << "Trimanga Review - " << (index + 1) << "/" << total << " - " << candidate.page.archive_name
         << " - " << action_name(candidate.review_action)
-        << "   Wheel/Arrows/HJKL=Carousel  Enter/Y=Keep  X/D=Delete  Esc=Close";
+        << "   Wheel/Arrows/HJKL=Carousel  X/D=Toggle Delete  A=Mark All  C=Clear  Esc=Close";
   SDL_SetWindowTitle(window, title.str().c_str());
 }
 
 SDL_Color action_color(ReviewAction action) {
   switch (action) {
     case ReviewAction::Keep:
-      return kKeep;
+      return kAccent;
     case ReviewAction::Delete:
       return kDelete;
     case ReviewAction::Undecided:
-      return kWarm;
+      return kAccent;
   }
-  return kWarm;
+  return kAccent;
 }
 
 void render_action_badge(SDL_Renderer* renderer, const Rect& card, ReviewAction action, bool prominent) {
-  if (action == ReviewAction::Undecided) {
-    return;
-  }
   const int radius = prominent ? 22 : 14;
   const int cx = card.x + card.w - radius - (prominent ? 18 : 10);
   const int cy = card.y + radius + (prominent ? 18 : 10);
-  fill_circle(renderer, cx, cy, radius, action == ReviewAction::Keep ? kKeep : kDelete);
-  if (action == ReviewAction::Keep) {
-    draw_check(renderer, cx, cy, kCanvas);
+  const bool deleted = action == ReviewAction::Delete;
+  fill_circle(renderer, cx, cy, radius, deleted ? kDelete : kAccent);
+  if (!deleted) {
+    draw_check(renderer, cx, cy, kPaper);
   } else {
-    draw_x(renderer, cx, cy, kCanvas);
+    draw_x(renderer, cx, cy, kPaper);
   }
 }
 
 void render_page_card(SDL_Renderer* renderer, TextureCache& cache, std::vector<Candidate>& candidates,
                       std::size_t index, double offset, int window_width, int window_height) {
   const bool selected = std::abs(offset) < 0.15;
-  const double depth = std::min(1.0, std::abs(offset) / 2.0);
-  const double scale = selected ? 1.0 : 0.74 - 0.08 * std::min(1.0, std::abs(offset));
-  const int max_height = std::max(260, window_height - 250);
-  const int card_height = static_cast<int>(max_height * scale);
-  const int card_width = static_cast<int>(std::min<double>(window_width * (selected ? 0.54 : 0.34), card_height * 0.72));
-  const int center_x = window_width / 2 + static_cast<int>(offset * std::min(360, window_width / 3));
-  const int top = 90 + static_cast<int>(std::abs(offset) * 26);
+  const double distance = std::min(1.0, std::abs(offset));
+  const double scale = selected ? 1.0 : 0.72 - 0.10 * distance;
+  TextureEntry* texture = cache.peek(index);
+  const double aspect =
+      (texture != nullptr && texture->width > 0 && texture->height > 0)
+          ? static_cast<double>(texture->width) / static_cast<double>(texture->height)
+          : 0.70;
+  const int stage_top = 104;
+  const int stage_bottom = window_height - 154;
+  const int max_height = std::max(260, stage_bottom - stage_top);
+  const int max_width = std::max(220, static_cast<int>(window_width * (selected ? 0.56 : 0.34)));
+  int card_height = static_cast<int>(max_height * scale);
+  int card_width = static_cast<int>(card_height * aspect);
+  if (card_width > max_width) {
+    card_width = max_width;
+    card_height = static_cast<int>(card_width / std::max(0.2, aspect));
+  }
+  card_height = std::clamp(card_height, 220, max_height);
+  card_width = std::clamp(card_width, 170, max_width);
+  const int center_x = window_width / 2 + static_cast<int>(offset * std::min(390, window_width / 3));
+  const int top = stage_top + (max_height - card_height) / 2 + static_cast<int>(distance * 18);
   const Rect card{center_x - card_width / 2, top, card_width, card_height};
 
-  SDL_Color backing = selected ? kPanelSoft : SDL_Color{22, 25, 30, static_cast<Uint8>(230 - depth * 80)};
-  fill(renderer, Rect{card.x + 10, card.y + 12, card.w, card.h}, SDL_Color{4, 5, 7, 100});
+  SDL_Color backing = selected ? kPaper : SDL_Color{255, 239, 246, static_cast<Uint8>(230 - distance * 70)};
+  fill(renderer, Rect{card.x + 8, card.y + 10, card.w, card.h}, SDL_Color{116, 62, 88, 58});
   fill(renderer, card, backing);
-  outline(renderer, card, selected ? action_color(candidates[index].review_action) : kStroke);
+  outline(renderer, card, selected ? action_color(candidates[index].review_action) : SDL_Color{230, 190, 207, 255});
 
-  TextureEntry& texture = cache.get(index);
-  const Rect image_bounds{card.x + 14, card.y + 14, card.w - 28, card.h - 28};
-  if (texture.texture != nullptr) {
-    const Rect destination = fit_image(texture.width, texture.height, image_bounds);
+  const Rect image_bounds{card.x + 12, card.y + 12, card.w - 24, card.h - 24};
+  if (texture != nullptr && texture->texture != nullptr) {
+    const Rect destination = fit_image(texture->width, texture->height, image_bounds);
     SDL_Rect sdl_destination{destination.x, destination.y, destination.w, destination.h};
-    SDL_SetTextureAlphaMod(texture.texture, selected ? 255 : 150);
-    SDL_RenderCopy(renderer, texture.texture, nullptr, &sdl_destination);
+    SDL_SetTextureAlphaMod(texture->texture, selected ? 255 : 165);
+    SDL_RenderCopy(renderer, texture->texture, nullptr, &sdl_destination);
   } else {
-    draw_centered_text(renderer, image_bounds, "IMAGE FAILED", kDelete, selected ? 3 : 2);
+    draw_centered_text(renderer, image_bounds, "LOADING", kMuted, selected ? 3 : 2);
   }
 
   render_action_badge(renderer, card, candidates[index].review_action, selected);
@@ -340,7 +367,19 @@ void render_button(SDL_Renderer* renderer, const Rect& rect, SDL_Color base, SDL
                    bool active) {
   fill(renderer, rect, active ? accent : base);
   outline(renderer, rect, accent);
-  draw_centered_text(renderer, Rect{rect.x + 42, rect.y, rect.w - 52, rect.h}, label, kText, 2);
+  draw_centered_text(renderer, Rect{rect.x + 42, rect.y, rect.w - 52, rect.h}, label, active ? kLightText : kText, 2);
+}
+
+void render_manga_background(SDL_Renderer* renderer, int window_width, int window_height) {
+  fill(renderer, Rect{0, 0, window_width, window_height}, kCanvas);
+  for (int y = 22; y < window_height; y += 34) {
+    for (int x = (y / 34) % 2 == 0 ? 16 : 33; x < window_width; x += 48) {
+      fill_circle(renderer, x, y, 2, SDL_Color{236, 197, 214, 120});
+    }
+  }
+  line(renderer, 0, 88, window_width, 18, SDL_Color{255, 222, 233, 120});
+  line(renderer, 0, 128, window_width, 58, SDL_Color{216, 247, 250, 130});
+  line(renderer, 0, window_height - 172, window_width, window_height - 228, SDL_Color{255, 222, 233, 120});
 }
 
 }  // namespace
@@ -352,6 +391,7 @@ bool review_candidates(std::vector<Candidate>& candidates) {
   if (SDL_Init(SDL_INIT_VIDEO) != 0) {
     return false;
   }
+  SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "1");
 
   SDL_Window* window = SDL_CreateWindow("Trimanga Review", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, 1220, 860,
                                         SDL_WINDOW_RESIZABLE | SDL_WINDOW_ALLOW_HIGHDPI);
@@ -370,23 +410,35 @@ bool review_candidates(std::vector<Candidate>& candidates) {
   std::size_t selected_index = 0;
   double carousel_position = 0.0;
   TextureCache cache(renderer, candidates);
+  cache.preload_near(selected_index, 4);
   update_title(window, candidates[selected_index], selected_index, candidates.size());
 
   auto select = [&](std::size_t next) {
     selected_index = std::min(next, candidates.size() - 1);
-    cache.keep_near(selected_index, 3);
+    cache.preload_near(selected_index, 4);
     update_title(window, candidates[selected_index], selected_index, candidates.size());
   };
-  auto mark = [&](ReviewAction action) {
-    candidates[selected_index].review_action = action;
-    if (selected_index + 1 < candidates.size()) {
-      select(selected_index + 1);
-    } else {
-      update_title(window, candidates[selected_index], selected_index, candidates.size());
+  auto toggle_delete = [&] {
+    candidates[selected_index].review_action =
+        candidates[selected_index].review_action == ReviewAction::Delete ? ReviewAction::Undecided : ReviewAction::Delete;
+    update_title(window, candidates[selected_index], selected_index, candidates.size());
+  };
+  auto mark_all_delete = [&] {
+    for (Candidate& candidate : candidates) {
+      candidate.review_action = ReviewAction::Delete;
     }
+    update_title(window, candidates[selected_index], selected_index, candidates.size());
+  };
+  auto clear_all_marks = [&] {
+    for (Candidate& candidate : candidates) {
+      candidate.review_action = ReviewAction::Undecided;
+    }
+    update_title(window, candidates[selected_index], selected_index, candidates.size());
   };
 
   bool running = true;
+  Uint64 last_tick = SDL_GetPerformanceCounter();
+  const double tick_frequency = static_cast<double>(SDL_GetPerformanceFrequency());
   while (running) {
     SDL_Event event;
     while (SDL_PollEvent(&event) != 0) {
@@ -403,7 +455,6 @@ bool review_candidates(std::vector<Candidate>& candidates) {
           case SDLK_l:
           case SDLK_j:
           case SDLK_n:
-          case SDLK_SPACE:
             if (selected_index + 1 < candidates.size()) {
               select(selected_index + 1);
             }
@@ -417,17 +468,19 @@ bool review_candidates(std::vector<Candidate>& candidates) {
               select(selected_index - 1);
             }
             break;
-          case SDLK_RETURN:
-            mark(ReviewAction::Keep);
-            break;
-          case SDLK_y:
-            mark(ReviewAction::Keep);
-            break;
           case SDLK_d:
           case SDLK_x:
           case SDLK_DELETE:
           case SDLK_BACKSPACE:
-            mark(ReviewAction::Delete);
+          case SDLK_RETURN:
+          case SDLK_SPACE:
+            toggle_delete();
+            break;
+          case SDLK_a:
+            mark_all_delete();
+            break;
+          case SDLK_c:
+            clear_all_marks();
             break;
           default:
             break;
@@ -442,14 +495,17 @@ bool review_candidates(std::vector<Candidate>& candidates) {
         int window_width = 0;
         int window_height = 0;
         SDL_GetWindowSize(window, &window_width, &window_height);
-        const Rect keep_button{window_width / 2 - 250, window_height - 78, 220, 50};
-        const Rect delete_button{window_width / 2 + 30, window_height - 78, 220, 50};
+        const Rect delete_button{window_width / 2 - 315, window_height - 78, 190, 50};
+        const Rect mark_all_button{window_width / 2 - 95, window_height - 78, 190, 50};
+        const Rect clear_button{window_width / 2 + 125, window_height - 78, 190, 50};
         const Rect previous_hit{0, 80, window_width / 3, window_height - 190};
         const Rect next_hit{window_width * 2 / 3, 80, window_width / 3, window_height - 190};
-        if (keep_button.contains(event.button.x, event.button.y)) {
-          mark(ReviewAction::Keep);
-        } else if (delete_button.contains(event.button.x, event.button.y)) {
-          mark(ReviewAction::Delete);
+        if (delete_button.contains(event.button.x, event.button.y)) {
+          toggle_delete();
+        } else if (mark_all_button.contains(event.button.x, event.button.y)) {
+          mark_all_delete();
+        } else if (clear_button.contains(event.button.x, event.button.y)) {
+          clear_all_marks();
         } else if (previous_hit.contains(event.button.x, event.button.y) && selected_index > 0) {
           select(selected_index - 1);
         } else if (next_hit.contains(event.button.x, event.button.y) && selected_index + 1 < candidates.size()) {
@@ -458,7 +514,11 @@ bool review_candidates(std::vector<Candidate>& candidates) {
       }
     }
 
-    carousel_position += (static_cast<double>(selected_index) - carousel_position) * 0.18;
+    const Uint64 now = SDL_GetPerformanceCounter();
+    const double delta_seconds = std::min(0.05, static_cast<double>(now - last_tick) / tick_frequency);
+    last_tick = now;
+    const double easing = 1.0 - std::exp(-14.0 * delta_seconds);
+    carousel_position += (static_cast<double>(selected_index) - carousel_position) * easing;
     if (std::abs(carousel_position - static_cast<double>(selected_index)) < 0.001) {
       carousel_position = static_cast<double>(selected_index);
     }
@@ -467,13 +527,13 @@ bool review_candidates(std::vector<Candidate>& candidates) {
     int window_height = 0;
     SDL_GetWindowSize(window, &window_width, &window_height);
 
-    fill(renderer, Rect{0, 0, window_width, window_height}, kCanvas);
-    fill(renderer, Rect{0, 0, window_width, 74}, kPanel);
-    draw_text(renderer, 28, 20, "TRIMANGA REVIEW", kText, 3);
-    draw_text(renderer, 28, 50, "WHEEL OR ARROWS TO SCROLL", kMuted, 2);
+    render_manga_background(renderer, window_width, window_height);
+    fill(renderer, Rect{0, 0, window_width, 84}, kPanel);
+    draw_text(renderer, 28, 18, "TRIMANGA REVIEW", kLightText, 3);
+    draw_text(renderer, 30, 52, "UNMARKED PAGES ARE KEPT", SDL_Color{230, 205, 221, 255}, 2);
 
     const std::string count = std::to_string(selected_index + 1) + "/" + std::to_string(candidates.size());
-    draw_text(renderer, window_width - text_width(count, 3) - 28, 22, count, kAccent, 3);
+    draw_text(renderer, window_width - text_width(count, 3) - 30, 24, count, SDL_Color{162, 239, 246, 255}, 3);
 
     const int base = static_cast<int>(std::floor(carousel_position));
     for (int offset = 3; offset >= -3; --offset) {
@@ -485,21 +545,26 @@ bool review_candidates(std::vector<Candidate>& candidates) {
                        static_cast<double>(candidate_index) - carousel_position, window_width, window_height);
     }
 
-    fill(renderer, Rect{0, window_height - 132, window_width, 132}, kPanel);
+    fill(renderer, Rect{0, window_height - 132, window_width, 132}, kPaper);
+    line(renderer, 0, window_height - 132, window_width, window_height - 132, kStroke);
     render_progress(renderer, selected_index, candidates.size(), window_width, window_height);
 
-    const Rect keep_button{window_width / 2 - 250, window_height - 78, 220, 50};
-    const Rect delete_button{window_width / 2 + 30, window_height - 78, 220, 50};
-    render_button(renderer, keep_button, kKeepSoft, kKeep, "KEEP", candidates[selected_index].review_action == ReviewAction::Keep);
-    render_button(renderer, delete_button, kDeleteSoft, kDelete, "DELETE",
-                  candidates[selected_index].review_action == ReviewAction::Delete);
-    fill_circle(renderer, keep_button.x + 28, keep_button.y + 25, 15, kKeep);
-    draw_check(renderer, keep_button.x + 28, keep_button.y + 25, kCanvas);
+    const Rect delete_button{window_width / 2 - 315, window_height - 78, 190, 50};
+    const Rect mark_all_button{window_width / 2 - 95, window_height - 78, 190, 50};
+    const Rect clear_button{window_width / 2 + 125, window_height - 78, 190, 50};
+    const bool marked_delete = candidates[selected_index].review_action == ReviewAction::Delete;
+    render_button(renderer, delete_button, kDeleteSoft, kDelete, marked_delete ? "UNDO" : "DELETE", marked_delete);
+    render_button(renderer, mark_all_button, kAccentSoft, kAccent, "ALL DELETE", false);
+    render_button(renderer, clear_button, SDL_Color{255, 239, 216, 255}, kWarm, "CLEAR", false);
     fill_circle(renderer, delete_button.x + 28, delete_button.y + 25, 15, kDelete);
     draw_x(renderer, delete_button.x + 28, delete_button.y + 25, kCanvas);
+    fill_circle(renderer, mark_all_button.x + 28, mark_all_button.y + 25, 15, kAccent);
+    draw_x(renderer, mark_all_button.x + 28, mark_all_button.y + 25, kPaper);
+    fill_circle(renderer, clear_button.x + 28, clear_button.y + 25, 15, kWarm);
+    draw_check(renderer, clear_button.x + 28, clear_button.y + 25, kPaper);
 
     draw_text(renderer, 28, window_height - 46, "ESC CLOSE", kMuted, 2);
-    draw_text(renderer, window_width - 312, window_height - 46, "ENTER KEEP  X DELETE", kMuted, 2);
+    draw_text(renderer, window_width - 438, window_height - 46, "SPACE TOGGLE  A ALL  C CLEAR", kMuted, 2);
 
     SDL_RenderPresent(renderer);
     SDL_Delay(8);
