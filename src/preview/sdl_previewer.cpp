@@ -524,7 +524,9 @@ void render_page_card(SDL_Renderer* renderer, TextureCache& cache, std::vector<C
   render_action_badge(renderer, card, candidates[index].review_action, selected, selected ? badge_pulse : 0.0);
 }
 
-void render_progress(SDL_Renderer* renderer, std::size_t index, std::size_t total, const Rect& rect) {
+void render_progress(SDL_Renderer* renderer, const std::vector<Candidate>& candidates, std::size_t index,
+                     const Rect& rect) {
+  const std::size_t total = candidates.size();
   if (total == 0) {
     return;
   }
@@ -538,10 +540,13 @@ void render_progress(SDL_Renderer* renderer, std::size_t index, std::size_t tota
     const int x0 = track.x + static_cast<int>((static_cast<double>(page) / total) * track.w);
     const int x1 = track.x + static_cast<int>((static_cast<double>(page + 1) / total) * track.w);
     const int width = std::max(1, x1 - x0 - gap);
-    SDL_Color color = SDL_Color{226, 195, 210, 255};
+    const bool marked_delete = candidates[page].review_action == ReviewAction::Delete;
+    SDL_Color color = marked_delete ? kDelete : SDL_Color{226, 195, 210, 255};
     int y = track.y;
     int height = track.h;
-    if (page < index) {
+    if (marked_delete) {
+      color = kDelete;
+    } else if (page < index) {
       color = kAccent;
     } else if (page == index) {
       color = kWarm;
@@ -732,10 +737,6 @@ bool review_candidates(std::vector<Candidate>& candidates) {
     hovered_button = ButtonId::None;
     pressed_button = ButtonId::None;
     SDL_SetWindowTitle(window, "Review Detected Scanlations - confirming selection");
-    if (!window_hidden) {
-      SDL_HideWindow(window);
-      window_hidden = true;
-    }
   };
 
   bool running = true;
@@ -857,12 +858,11 @@ bool review_candidates(std::vector<Candidate>& candidates) {
       escape_hold_time += delta_seconds;
       if (escape_hold_time >= 1.0) {
         start_confirm();
-        running = false;
       }
     }
     if (confirming) {
       confirm_time += delta_seconds;
-      if (confirm_time >= 0.74) {
+      if (confirm_time >= 0.48) {
         if (!window_hidden) {
           SDL_HideWindow(window);
           window_hidden = true;
@@ -915,8 +915,8 @@ bool review_candidates(std::vector<Candidate>& candidates) {
     render_header(renderer, layout.header, selected_index, candidates.size(), candidates[selected_index].review_action,
                   header_alpha);
 
-    const double gather_progress = confirming ? ease_out(std::min(1.0, confirm_time / 0.26)) : 0.0;
-    const double tear_progress = confirming ? std::clamp((confirm_time - 0.20) / 0.62, 0.0, 1.0) : 0.0;
+    const double gather_progress = confirming ? ease_out(std::min(1.0, confirm_time / 0.16)) : 0.0;
+    const double tear_progress = confirming ? std::clamp((confirm_time - 0.12) / 0.32, 0.0, 1.0) : 0.0;
     const double hold_progress = escape_held && !confirming ? std::clamp(escape_hold_time / 1.0, 0.0, 1.0) : 0.0;
     const double shake = hold_progress * 5.0;
     const int base = static_cast<int>(std::round(carousel_position));
@@ -931,22 +931,24 @@ bool review_candidates(std::vector<Candidate>& candidates) {
         continue;
       }
       const double visual_offset = (static_cast<double>(candidate_index) - carousel_position) * (1.0 - gather_progress);
+      const double delete_slide = delete_slides[static_cast<std::size_t>(candidate_index)] * (1.0 - gather_progress);
       render_page_card(renderer, cache, candidates, static_cast<std::size_t>(candidate_index),
                        visual_offset, layout.content,
                        ease_out(focus_pulse) * content_alpha, ease_out(badge_pulse) * content_alpha,
-                       delete_slides[static_cast<std::size_t>(candidate_index)], tear_progress,
+                       delete_slide, tear_progress,
                        shake * delete_slides[static_cast<std::size_t>(candidate_index)]);
     }
     const double active_offset = (static_cast<double>(selected_index) - carousel_position) * (1.0 - gather_progress);
+    const double active_delete_slide = delete_slides[selected_index] * (1.0 - gather_progress);
     render_page_card(renderer, cache, candidates, selected_index, active_offset, layout.content,
                      ease_out(focus_pulse) * content_alpha, ease_out(badge_pulse) * content_alpha,
-                     delete_slides[selected_index], tear_progress, shake * delete_slides[selected_index]);
+                     active_delete_slide, tear_progress, shake * delete_slides[selected_index]);
     SDL_RenderSetClipRect(renderer, nullptr);
 
     const Rect progress{layout.action.x + 18, layout.action.y + 12, layout.action.w - 36, 6};
     render_action_area(renderer, layout.action, delete_button, toggle_all_button, candidates[selected_index].review_action,
                        hovered_button, pressed_button, action_alpha);
-    render_progress(renderer, selected_index, candidates.size(), progress);
+    render_progress(renderer, candidates, selected_index, progress);
     render_footer(renderer, layout.footer);
 
     SDL_RenderPresent(renderer);
