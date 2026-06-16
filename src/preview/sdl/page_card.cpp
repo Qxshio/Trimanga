@@ -27,7 +27,9 @@ void render_page_card(SDL_Renderer* renderer, TextureCache& cache, std::vector<C
   const double distance = std::min(1.0, std::abs(offset));
   const double focus = smoothstep(1.0 - distance);
   const bool selected = focus > 0.72;
-  const double scale = 0.62 + 0.38 * focus + 0.018 * focus * focus_pulse;
+  const double delete_depth = ease_out(delete_slide);
+  const double scale =
+      (0.62 + 0.38 * focus + 0.018 * focus * focus_pulse) * (1.0 - 0.13 * delete_depth);
   TextureEntry* texture = cache.peek(index);
   const double aspect =
       (texture != nullptr && texture->width > 0 && texture->height > 0)
@@ -46,9 +48,7 @@ void render_page_card(SDL_Renderer* renderer, TextureCache& cache, std::vector<C
   const int shake_x = static_cast<int>(std::sin(shake * 92.0 + index * 1.7) * shake);
   const int shake_y = static_cast<int>(std::cos(shake * 79.0 + index * 2.1) * shake * 0.55);
   const int base_top = content.y + (content.h - card_height) / 2 + static_cast<int>(distance * 18);
-  const int peek_height = std::clamp(static_cast<int>(card_height * (selected ? 0.24 : 0.20)), 64, 118);
-  const int deleted_top = content.y + content.h - peek_height;
-  const int delete_drop = static_cast<int>(std::round(delete_slide * std::max(0, deleted_top - base_top)));
+  const int delete_drop = static_cast<int>(std::round(delete_depth * (18.0 + 18.0 * focus)));
   const int center_x = content.x + content.w / 2 + static_cast<int>(offset * std::min(390, content.w / 3)) + shake_x;
   const int top = base_top + delete_drop + shake_y;
   const Rect card{center_x - card_width / 2, top, card_width, card_height};
@@ -113,9 +113,18 @@ void render_page_card(SDL_Renderer* renderer, TextureCache& cache, std::vector<C
   }
 
   SDL_Color backing = mix(SDL_Color{255, 239, 246, static_cast<Uint8>(230 - distance * 70)}, kPaper, focus);
-  const int shadow_offset = static_cast<int>(8.0 + 4.0 * focus + 4.0 * focus * focus_pulse);
-  fill(renderer, Rect{card.x + shadow_offset, card.y + shadow_offset, card.w, card.h},
-       SDL_Color{116, 62, 88, static_cast<Uint8>(44 + 26 * focus)});
+  if (delete_depth > 0.0) {
+    backing = mix(backing, SDL_Color{245, 219, 230, backing.a}, 0.28 * delete_depth);
+  }
+  const int shadow_offset =
+      static_cast<int>(std::round(8.0 + 4.0 * focus + 4.0 * focus * focus_pulse + 12.0 * delete_depth));
+  const int shadow_spread = static_cast<int>(std::round(delete_depth * (12.0 + 10.0 * focus)));
+  const Uint8 shadow_alpha =
+      static_cast<Uint8>(std::clamp(44.0 + 26.0 * focus + 54.0 * delete_depth, 0.0, 180.0));
+  fill(renderer,
+       Rect{card.x + shadow_offset - shadow_spread / 2, card.y + shadow_offset - shadow_spread / 2,
+            card.w + shadow_spread, card.h + shadow_spread},
+       SDL_Color{116, 62, 88, shadow_alpha});
   fill(renderer, card, backing);
   outline(renderer, card, selected ? action_color(candidates[index].review_action) : SDL_Color{230, 190, 207, 255});
 
